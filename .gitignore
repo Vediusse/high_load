@@ -1,0 +1,21 @@
+.idea/
+*.iml
+.vscode/
+
+# macOS
+.DS_Store
+
+# Build
+target/
+build/
+out/
+*.class
+
+# Env
+.env
+.env.local
+
+# Папки, которые НЕ должны попадать в git
+AI/
+Планировка/
+Артефакты/

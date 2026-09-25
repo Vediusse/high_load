@@ -1,0 +1,13 @@
+spring:
+  r2dbc:
+    url: ${CATALOG_R2DBC_URL:r2dbc:postgresql://catalog-postgres:5432/catalog}
+    username: ${CATALOG_DB_USER:catalog}
+    password: ${CATALOG_DB_PASSWORD:catalog-dev}
+  flyway:
+    url: ${CATALOG_JDBC_URL:jdbc:postgresql://catalog-postgres:5432/catalog}
+    user: ${CATALOG_DB_USER:catalog}
+    password: ${CATALOG_DB_PASSWORD:catalog-dev}
+    validate-migration-naming: true
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

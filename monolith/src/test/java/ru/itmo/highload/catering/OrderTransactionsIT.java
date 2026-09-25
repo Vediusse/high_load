@@ -13,8 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessException;
-import ru.itmo.highload.catering.catalog.entity.Dish;
-import ru.itmo.highload.catering.catalog.repository.DishRepository;
+import ru.itmo.highload.catering.CatalogFixture.Dish;
 import ru.itmo.highload.catering.common.error.ApiException;
 import ru.itmo.highload.catering.order.dto.CreateOrderRequest;
 import ru.itmo.highload.catering.order.dto.OrderLineInput;
@@ -38,8 +37,6 @@ class OrderTransactionsIT extends AbstractPostgresIT {
     @Autowired
     DeliveryPointRepository deliveryPointRepository;
 
-    @Autowired
-    DishRepository dishRepository;
 
     @Test
     void failedLineReplacementKeepsPreviousCompositionCompletely() {
@@ -87,7 +84,6 @@ class OrderTransactionsIT extends AbstractPostgresIT {
                                 new OrderLineInput(activeDish.getId(), 1),
                                 new OrderLineInput(laterInactiveDish.getId(), 2))));
         laterInactiveDish.deactivate();
-        dishRepository.saveAndFlush(laterInactiveDish);
 
         assertThatThrownBy(() -> orderService.submit(draft.id(), withLines.version()))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
@@ -119,10 +115,8 @@ class OrderTransactionsIT extends AbstractPostgresIT {
                         List.of(new OrderLineInput(dish.getId(), 2))));
 
         dish.update("Борщ фирменный", "", new BigDecimal("200.00"), Set.of());
-        dish = dishRepository.saveAndFlush(dish);
         OrderResponse submitted = orderService.submit(draft.id(), withLines.version());
         dish.update("Борщ новый", "", new BigDecimal("300.00"), Set.of());
-        dishRepository.saveAndFlush(dish);
 
         OrderResponse unchanged = orderService.getOrder(draft.id());
         assertThat(unchanged.totalAmount()).isEqualByComparingTo("400.00");
@@ -169,6 +163,85 @@ class OrderTransactionsIT extends AbstractPostgresIT {
                 submitted.id())).isEqualTo(1L);
     }
 
+    @Test
+    void unavailableCatalogCannotChangeCompositionOrSubmitAndCircuitRecovers() {
+        Fixture fixture = fixture();
+        Dish dish = dish("Борщ", "180.00");
+        OrderResponse draft = createDraft(fixture);
+        OrderResponse filled = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
+                draft.version(), List.of(new OrderLineInput(dish.getId(), 2))));
+        breakers.circuitBreaker("catalog").reset();
+        catalog.failureStatus = 503;
+        for (int attempt = 0; attempt < 5; attempt++) {
+            assertThatThrownBy(() -> orderService.submit(filled.id(), filled.version()))
+                    .isInstanceOfSatisfying(ApiException.class, error -> {
+                        assertThat(error.getStatus().value()).isEqualTo(503);
+                        assertThat(error.getCode()).isEqualTo("DEPENDENCY_UNAVAILABLE");
+                    });
+        }
+        assertThat(breakers.circuitBreaker("catalog").getState().name()).isEqualTo("OPEN");
+        int sent = catalog.requests.get();
+        assertThatThrownBy(() -> orderService.replaceDraftLines(filled.id(), new ReplaceOrderLinesRequest(
+                filled.version(), List.of(new OrderLineInput(dish.getId(), 3))))).isInstanceOf(ApiException.class);
+        assertThat(catalog.requests.get()).isEqualTo(sent);
+        OrderResponse unchanged = orderService.getOrder(filled.id());
+        assertThat(unchanged).isEqualTo(filled);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM order_status_history", Long.class)).isZero();
+        catalog.failureStatus = 0;
+        org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(8)).ignoreException(ApiException.class).untilAsserted(() -> {
+            assertThat(orderService.submit(filled.id(), filled.version()).status().name()).isEqualTo("SUBMITTED");
+        });
+        // A second successful network call completes the half-open trial window.
+        var another = createDraft(fixture);
+        orderService.replaceDraftLines(another.id(), new ReplaceOrderLinesRequest(another.version(),
+                List.of(new OrderLineInput(dish.getId(), 1))));
+        assertThat(breakers.circuitBreaker("catalog").getState().name()).isEqualTo("CLOSED");
+    }
+
+    @Test
+    void timeoutAndIncompleteBatchLeaveDraftUntouched() {
+        Fixture fixture = fixture();
+        Dish dish = dish("Борщ", "180.00");
+        OrderResponse draft = createDraft(fixture);
+        var command = new ReplaceOrderLinesRequest(draft.version(), List.of(new OrderLineInput(dish.getId(), 1)));
+        catalog.delayMillis = 3000;
+        long start = System.nanoTime();
+        assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), command))
+                .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getStatus().value()).isEqualTo(503));
+        assertThat(java.time.Duration.ofNanos(System.nanoTime() - start).toMillis()).isBetween(1800L, 5000L);
+        catalog.delayMillis = 0;
+        catalog.incomplete = true;
+        assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), command))
+                .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getStatus().value()).isEqualTo(503));
+        assertThat(orderService.getOrder(draft.id())).isEqualTo(draft);
+        assertThat(catalog.requests.get()).isEqualTo(2);
+    }
+
+    @Test
+    void businessErrorsDoNotOpenCircuitAndTraceReachesCatalog() {
+        Fixture fixture = fixture();
+        OrderResponse draft = createDraft(fixture);
+        for (int attempt = 0; attempt < 6; attempt++) {
+            assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
+                    draft.version(), List.of(new OrderLineInput(UUID.randomUUID(), 1)))))
+                    .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getStatus().value()).isEqualTo(404));
+        }
+        assertThat(breakers.circuitBreaker("catalog").getState().name()).isEqualTo("CLOSED");
+        assertThat(catalog.requests.get()).isEqualTo(6);
+        var request = new org.springframework.mock.web.MockHttpServletRequest();
+        request.setAttribute(ru.itmo.highload.catering.common.error.RequestTraceFilter.TRACE_ID_ATTRIBUTE, "order-catalog-trace");
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(
+                new org.springframework.web.context.request.ServletRequestAttributes(request));
+        try {
+            Dish dish = dish("Борщ", "180.00");
+            orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(draft.version(),
+                    List.of(new OrderLineInput(dish.getId(), 1))));
+            assertThat(catalog.lastTrace).isEqualTo("order-catalog-trace");
+        } finally {
+            org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+        }
+    }
+
     private Fixture fixture() {
         Organization organization = organizationRepository.saveAndFlush(
                 new Organization("Альфа", "+79991234567"));
@@ -183,7 +256,7 @@ class OrderTransactionsIT extends AbstractPostgresIT {
     }
 
     private Dish dish(String name, String price) {
-        return dishRepository.saveAndFlush(new Dish(name, "", new BigDecimal(price), Set.of()));
+        return catalog.dish(name, price);
     }
 
     private OrderResponse createDraft(Fixture fixture) {

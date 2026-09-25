@@ -25,3 +25,33 @@ spring:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+    urls:
+      - name: Заказы и организации
+        url: /v3/api-docs
+      - name: Каталог
+        url: /v3/api-docs/catalog
+
+---
+spring:
+  cloud:
+    openfeign:
+      client:
+        config:
+          catalog-service:
+            connectTimeout: 1000
+            readTimeout: 2000
+    circuitbreaker:
+      resilience4j:
+        disable-time-limiter: true
+        disable-thread-pool: true
+resilience4j:
+  circuitbreaker:
+    instances:
+      catalog:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 5s
+        permittedNumberOfCallsInHalfOpenState: 2
+        ignoreExceptions:
+          - ru.itmo.highload.catering.common.error.ApiException

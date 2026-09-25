@@ -1,14 +1,5 @@
 package ru.itmo.highload.catering.catalog.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.JoinTable;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.Table;
-import jakarta.persistence.Version;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
@@ -19,9 +10,11 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.data.annotation.Version;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Table;
 
-@Entity
-@Table(name = "dish")
+@Table("dish")
 public class Dish {
 
     @Id
@@ -29,32 +22,23 @@ public class Dish {
 
     @NotBlank
     @Size(max = 200)
-    @Column(nullable = false, length = 200)
     private String name;
 
     @NotNull
     @Size(max = 2000)
-    @Column(nullable = false, length = 2000)
     private String description;
 
     @NotNull
     @DecimalMin(value = "0.00", inclusive = false)
     @Digits(integer = 17, fraction = 2)
-    @Column(name = "current_price", nullable = false, precision = 19, scale = 2)
     private BigDecimal currentPrice;
 
-    @Column(nullable = false)
     private boolean active;
 
     @Version
-    @Column(nullable = false)
-    private long version;
+    private Long version;
 
-    @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "dish_category",
-            joinColumns = @JoinColumn(name = "dish_id"),
-            inverseJoinColumns = @JoinColumn(name = "category_id"))
+    @org.springframework.data.annotation.Transient
     private Set<Category> categories = new LinkedHashSet<>();
 
     protected Dish() {
@@ -111,7 +95,7 @@ public class Dish {
     }
 
     public long getVersion() {
-        return version;
+        return version == null ? 0 : version;
     }
 
     public Set<Category> getCategories() {

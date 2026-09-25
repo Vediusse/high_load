@@ -15,6 +15,7 @@
         <module>config-service</module>
         <module>discovery-service</module>
         <module>gateway-service</module>
+        <module>catalog-service</module>
         <module>monolith</module>
     </modules>
     <properties>

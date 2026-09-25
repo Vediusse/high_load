@@ -9,6 +9,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 abstract class AbstractPostgresIT {
 
+    protected static final CatalogFixture catalog = new CatalogFixture();
+
     private static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>("postgres:17.11-alpine3.24");
 
@@ -18,6 +20,7 @@ abstract class AbstractPostgresIT {
 
     @DynamicPropertySource
     static void configurePostgres(DynamicPropertyRegistry registry) {
+        registry.add("clients.catalog.url", catalog::url);
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
@@ -26,11 +29,16 @@ abstract class AbstractPostgresIT {
     @Autowired
     protected JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    protected io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry breakers;
+
     @BeforeEach
     void cleanBusinessTables() {
+        catalog.reset();
+        breakers.getAllCircuitBreakers().forEach(io.github.resilience4j.circuitbreaker.CircuitBreaker::reset);
         jdbcTemplate.execute("""
                 TRUNCATE TABLE order_status_history, order_line, corporate_order,
-                    dish_category, dish, category, delivery_point, organization CASCADE
+                    delivery_point, organization CASCADE
                 """);
     }
 }

@@ -4,7 +4,7 @@ set -euo pipefail
 project="${1:?Укажи имя Compose-проекта}"
 base_url="${2:-http://localhost:8080}"
 
-for command in docker curl jq; do
+for command in docker curl jq python3; do
     command -v "$command" >/dev/null || { echo "Нужен $command" >&2; exit 1; }
 done
 
@@ -21,13 +21,13 @@ done
 
 registry="$(docker compose -p "$project" exec -T config-service \
     wget -qO- --header='Accept: application/json' http://discovery-service:8761/eureka/apps)"
-for application in MONOLITH GATEWAY-SERVICE; do
+for application in MONOLITH CATALOG-SERVICE GATEWAY-SERVICE; do
     jq -e --arg name "$application" \
         '.applications.application[] | select(.name == $name) | .instance[] | select(.status == "UP")' \
         <<< "$registry" >/dev/null
 done
 
-for service in monolith gateway-service; do
+for service in monolith catalog-service gateway-service; do
     docker compose -p "$project" exec -T config-service \
         wget -qO- "http://$service:8080/actuator/info" \
         | jq -e '.configuration.source == "config-service" and .configuration.revision == "l2.2"' >/dev/null
@@ -42,8 +42,9 @@ for path in /internal/v1/orders /eureka/apps /actuator/env; do
 done
 
 curl -fsS --max-time 10 "$base_url/swagger-ui/index.html" >/dev/null
-curl -fsS --max-time 10 "$base_url/v3/api-docs" | jq -e \
-    '.servers[0].url == "/" and ([.paths[] | to_entries[] | select(.key | IN("get","post","put","delete","patch"))] | length) == 32' >/dev/null
+(curl -fsS --max-time 10 "$base_url/v3/api-docs"; curl -fsS --max-time 10 "$base_url/v3/api-docs/catalog") | jq -s -e \
+    'all(.[]; .servers[0].url == "/") and ([.[].paths[] | to_entries[] | select(.key | IN("get","post","put","delete","patch"))] | length) == 32' >/dev/null
 
+python3 "$(dirname "$0")/lab2-api-contract.py" "$base_url"
 echo 'PASS: Config Server, Eureka, Gateway и Swagger'
 "$(dirname "$0")/lab1-defense.sh" "$base_url"

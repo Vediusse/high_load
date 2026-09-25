@@ -23,8 +23,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import ru.itmo.highload.catering.catalog.entity.Dish;
-import ru.itmo.highload.catering.catalog.repository.DishRepository;
+import ru.itmo.highload.catering.CatalogFixture.Dish;
 import ru.itmo.highload.catering.order.dto.CreateOrderRequest;
 import ru.itmo.highload.catering.order.dto.OrderLineInput;
 import ru.itmo.highload.catering.order.dto.OrderResponse;
@@ -54,8 +53,6 @@ class OrderLifecycleApiIT extends AbstractPostgresIT {
     @Autowired
     DeliveryPointRepository deliveryPointRepository;
 
-    @Autowired
-    DishRepository dishRepository;
 
     @Test
     void fullLifecycleReachesCompletedAndHistoryIsChronologicalAndPaged() throws Exception {
@@ -295,8 +292,7 @@ class OrderLifecycleApiIT extends AbstractPostgresIT {
                 "Кронверкский проспект, 49",
                 "Иван Петров",
                 "+79991234568"));
-        Dish dish = dishRepository.saveAndFlush(
-                new Dish("Борщ", "Описание", new BigDecimal("180.00"), Set.of()));
+        Dish dish = catalog.dish("Борщ", "180.00");
         return new Fixture(organization.getId(), point.getId(), dish.getId());
     }
 

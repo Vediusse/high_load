@@ -7,6 +7,16 @@ spring:
             connect-timeout: 1000
             response-timeout: 10s
           routes:
+            - id: catalog-api
+              uri: lb://catalog-service
+              predicates:
+                - Path=/api/v1/categories/**,/api/v1/dishes/**
+            - id: catalog-docs
+              uri: lb://catalog-service
+              predicates:
+                - Path=/v3/api-docs/catalog
+              filters:
+                - SetPath=/v3/api-docs
             - id: monolith-api
               uri: lb://monolith
               predicates:

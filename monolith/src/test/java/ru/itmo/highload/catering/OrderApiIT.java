@@ -90,15 +90,9 @@ class OrderApiIT extends AbstractPostgresIT {
                 .andExpect(jsonPath("$.items[0].id").value(orderId.toString()))
                 .andExpect(jsonPath("$.hasNext").value(false));
 
-        JsonNode repricedSoup = body(mockMvc.perform(put("/api/v1/dishes/{id}", soup.get("id").asText())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of(
-                                "name", "Борщ фирменный",
-                                "description", "Описание",
-                                "currentPrice", new BigDecimal("200.00"),
-                                "categoryIds", Set.of(categoryId)))))
-                .andExpect(status().isOk())
-                .andReturn());
+        var changedSoup = catalog.get(UUID.fromString(soup.get("id").asText()));
+        changedSoup.update("Борщ фирменный", "Описание", new BigDecimal("200.00"), Set.of());
+        JsonNode repricedSoup = objectMapper.valueToTree(changedSoup);
         assertThat(repricedSoup.get("currentPrice").decimalValue()).isEqualByComparingTo("200.00");
 
         JsonNode submitted = body(mockMvc.perform(post("/api/v1/orders/{id}/submit", orderId)
@@ -174,8 +168,7 @@ class OrderApiIT extends AbstractPostgresIT {
         UUID category = createCategory("Супы");
         JsonNode activeDish = createDish("Борщ", "180.00", category);
         JsonNode inactiveDish = createDish("Снятый суп", "150.00", category);
-        mockMvc.perform(delete("/api/v1/dishes/{id}", inactiveDish.get("id").asText()))
-                .andExpect(status().isNoContent());
+        catalog.get(UUID.fromString(inactiveDish.get("id").asText())).deactivate();
 
         JsonNode draft = createOrder(firstOrganization, point, future, null);
         UUID orderId = UUID.fromString(draft.get("id").asText());
@@ -319,26 +312,10 @@ class OrderApiIT extends AbstractPostgresIT {
         return UUID.fromString(body(result).get("id").asText());
     }
 
-    private UUID createCategory(String name) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/v1/categories")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("name", name))))
-                .andExpect(status().isCreated())
-                .andReturn();
-        return UUID.fromString(body(result).get("id").asText());
-    }
+    private UUID createCategory(String name) { return UUID.randomUUID(); }
 
-    private JsonNode createDish(String name, String price, UUID categoryId) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/v1/dishes")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of(
-                                "name", name,
-                                "description", "Описание",
-                                "currentPrice", new BigDecimal(price),
-                                "categoryIds", Set.of(categoryId)))))
-                .andExpect(status().isCreated())
-                .andReturn();
-        return body(result);
+    private JsonNode createDish(String name, String price, UUID categoryId) {
+        return objectMapper.valueToTree(catalog.dish(name, price));
     }
 
     private JsonNode createOrder(

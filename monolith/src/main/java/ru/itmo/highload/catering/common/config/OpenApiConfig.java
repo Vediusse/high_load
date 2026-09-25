@@ -17,7 +17,7 @@ public class OpenApiConfig {
                 .servers(java.util.List.of(new io.swagger.v3.oas.models.servers.Server().url("/")))
                 .info(new Info()
                         .title("Corporate Catering API")
-                        .description("API монолита корпоративного питания: справочники, меню и полный жизненный цикл заказа")
+                        .description("Организации, точки выдачи и полный жизненный цикл заказа")
                         .version("v1"));
     }
 

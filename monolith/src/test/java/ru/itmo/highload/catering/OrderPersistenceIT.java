@@ -13,8 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
-import ru.itmo.highload.catering.catalog.entity.Dish;
-import ru.itmo.highload.catering.catalog.repository.DishRepository;
+import ru.itmo.highload.catering.CatalogFixture.Dish;
 import ru.itmo.highload.catering.order.dto.CreateOrderRequest;
 import ru.itmo.highload.catering.order.dto.OrderLineInput;
 import ru.itmo.highload.catering.order.dto.OrderResponse;
@@ -42,8 +41,6 @@ class OrderPersistenceIT extends AbstractPostgresIT {
     @Autowired
     DeliveryPointRepository deliveryPointRepository;
 
-    @Autowired
-    DishRepository dishRepository;
 
     @Test
     void enumAndThreeOrderRelationsArePersistedAndHistoryIsAppendOnly() {
@@ -55,8 +52,7 @@ class OrderPersistenceIT extends AbstractPostgresIT {
                 "Адрес",
                 "Иван",
                 "+79991234568"));
-        Dish dish = dishRepository.saveAndFlush(
-                new Dish("Борщ", "", new BigDecimal("180.00"), Set.of()));
+        Dish dish = catalog.dish("Борщ", "180.00");
         OrderResponse draft = orderService.createDraft(new CreateOrderRequest(
                 organization.getId(),
                 point.getId(),
@@ -107,8 +103,7 @@ class OrderPersistenceIT extends AbstractPostgresIT {
                 "Адрес",
                 "Иван",
                 "+79991234568"));
-        Dish dish = dishRepository.saveAndFlush(
-                new Dish("Борщ", "", new BigDecimal("180.00"), Set.of()));
+        Dish dish = catalog.dish("Борщ", "180.00");
         OrderResponse draft = orderService.createDraft(new CreateOrderRequest(
                 organization.getId(),
                 point.getId(),

@@ -22,9 +22,9 @@ import ru.itmo.highload.catering.catalog.dto.CategoryResponse;
 import ru.itmo.highload.catering.catalog.dto.CreateCategoryRequest;
 import ru.itmo.highload.catering.catalog.dto.UpdateCategoryRequest;
 import ru.itmo.highload.catering.catalog.service.CatalogService;
-import ru.itmo.highload.catering.common.dto.PageResponse;
-import ru.itmo.highload.catering.common.config.StandardApiErrors;
-import ru.itmo.highload.catering.common.web.Pagination;
+import ru.itmo.highload.common.dto.PageResponse;
+import ru.itmo.highload.common.config.StandardApiErrors;
+import ru.itmo.highload.common.web.Pagination;
 
 @RestController
 @RequestMapping("/api/v1/categories")

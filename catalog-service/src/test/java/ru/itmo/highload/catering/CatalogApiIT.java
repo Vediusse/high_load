@@ -38,6 +38,14 @@ class CatalogApiIT {
     }
     @Autowired WebTestClient client;
     @Autowired R2dbcEntityTemplate template;
+    @Autowired org.springframework.context.ApplicationContext context;
+
+    @Test void sharedLibraryDoesNotEnableBlockingPersistenceInCatalog() {
+        assertThat(context.getBeansOfType(ru.itmo.highload.common.web.BlockingRequests.class)).isEmpty();
+        assertThat(context.containsBean("blockingRequestScheduler")).isFalse();
+        assertThat(org.springframework.util.ClassUtils.isPresent("jakarta.persistence.Entity", getClass().getClassLoader()))
+                .isFalse();
+    }
     @BeforeEach void clean() {
         template.getDatabaseClient().sql("TRUNCATE dish_category, dish, category CASCADE").fetch().rowsUpdated().block();
     }

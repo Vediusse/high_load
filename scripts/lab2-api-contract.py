@@ -7,7 +7,7 @@ from pathlib import Path
 
 base_url = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8080"
 paths, schemas = {}, {}
-for suffix in ("", "/catalog", "/production"):
+for suffix in ("", "/catalog", "/kitchen"):
     with urllib.request.urlopen(base_url + "/v3/api-docs" + suffix, timeout=15) as response:
         document = json.load(response)
     assert document["servers"][0]["url"] == "/"

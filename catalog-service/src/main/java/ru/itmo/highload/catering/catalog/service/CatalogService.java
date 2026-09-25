@@ -14,8 +14,8 @@ import reactor.core.publisher.Mono;
 import ru.itmo.highload.catering.catalog.dto.*;
 import ru.itmo.highload.catering.catalog.entity.Category;
 import ru.itmo.highload.catering.catalog.entity.Dish;
-import ru.itmo.highload.catering.common.dto.PageResponse;
-import ru.itmo.highload.catering.common.error.ApiException;
+import ru.itmo.highload.common.dto.PageResponse;
+import ru.itmo.highload.common.error.ApiException;
 import static org.springframework.data.relational.core.query.Criteria.where;
 import static org.springframework.data.relational.core.query.Query.query;
 

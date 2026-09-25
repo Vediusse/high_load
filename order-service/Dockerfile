@@ -2,12 +2,14 @@ FROM eclipse-temurin:21.0.12_8-jdk-alpine-3.24 AS build
 WORKDIR /workspace
 COPY .mvn .mvn
 COPY mvnw pom.xml ./
+COPY common/pom.xml common/pom.xml
+COPY common/src common/src
 COPY config-service/pom.xml config-service/pom.xml
 COPY discovery-service/pom.xml discovery-service/pom.xml
 COPY gateway-service/pom.xml gateway-service/pom.xml
 COPY catalog-service/pom.xml catalog-service/pom.xml
 COPY order-service/pom.xml order-service/pom.xml
-COPY production-service/pom.xml production-service/pom.xml
+COPY kitchen-service/pom.xml kitchen-service/pom.xml
 COPY order-service order-service
 RUN --mount=type=cache,target=/root/.m2,sharing=locked ./mvnw -B -ntp -pl order-service -am -DskipTests package
 FROM eclipse-temurin:21.0.12_8-jre-alpine-3.24

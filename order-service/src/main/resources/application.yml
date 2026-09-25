@@ -3,3 +3,9 @@ spring:
     name: order-service
   config:
     import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+
+---
+catering:
+  blocking:
+    enabled: true
+    thread-name-prefix: order-blocking

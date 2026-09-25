@@ -3,7 +3,7 @@ package ru.itmo.highload.gateway;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
-import java.util.Map;
+import ru.itmo.highload.common.error.ApiError;
 import org.springframework.boot.web.reactive.error.ErrorWebExceptionHandler;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -31,11 +31,10 @@ public class GatewayErrors implements ErrorWebExceptionHandler {
                 && status.getStatusCode().value() == 404;
         exchange.getResponse().setStatusCode(missing ? HttpStatus.NOT_FOUND : HttpStatus.SERVICE_UNAVAILABLE);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        Map<String, Object> body = Map.of(
-                "code", missing ? "RESOURCE_NOT_FOUND" : "DEPENDENCY_UNAVAILABLE",
-                "message", missing ? "Ресурс не найден" : "Сервис временно недоступен",
-                "fieldErrors", List.of(),
-                "traceId", exchange.getAttributeOrDefault("traceId", "unknown"));
+        ApiError body = new ApiError(
+                missing ? "RESOURCE_NOT_FOUND" : "DEPENDENCY_UNAVAILABLE",
+                missing ? "Ресурс не найден" : "Сервис временно недоступен",
+                List.of(), exchange.getAttributeOrDefault("traceId", "unknown"));
         try {
             return exchange.getResponse().writeWith(Mono.just(exchange.getResponse().bufferFactory()
                     .wrap(mapper.writeValueAsBytes(body))));

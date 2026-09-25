@@ -8,6 +8,7 @@
     </parent>
     <artifactId>gateway-service</artifactId>
     <dependencies>
+        <dependency><groupId>ru.itmo.highload</groupId><artifactId>common</artifactId><version>${project.version}</version></dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>

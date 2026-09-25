@@ -7,14 +7,14 @@ spring:
             connect-timeout: 1000
             response-timeout: 10s
           routes:
-            - id: production-commands
-              uri: lb://production-service
+            - id: kitchen-commands
+              uri: lb://kitchen-service
               predicates:
                 - Path=/api/v1/orders/{id}/start-cooking,/api/v1/orders/{id}/mark-ready,/api/v1/orders/{id}/complete
-            - id: production-docs
-              uri: lb://production-service
+            - id: kitchen-docs
+              uri: lb://kitchen-service
               predicates:
-                - Path=/v3/api-docs/production
+                - Path=/v3/api-docs/kitchen
               filters:
                 - SetPath=/v3/api-docs
             - id: catalog-api

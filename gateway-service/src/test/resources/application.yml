@@ -4,3 +4,9 @@ spring:
   cloud:
     config:
       enabled: false
+
+# GatewayErrors handles routing and upstream failures.
+catering:
+  web:
+    errors:
+      enabled: false

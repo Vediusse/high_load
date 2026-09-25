@@ -88,12 +88,13 @@ services:
         condition: service_healthy
       discovery-service:
         condition: service_healthy
-  production-postgres:
+  # Keep the physical database and volume identity for existing data.
+  kitchen-postgres:
     image: postgres:17.11-alpine3.24
     environment:
       POSTGRES_DB: production
-      POSTGRES_USER: ${PRODUCTION_DB_USER:-production}
-      POSTGRES_PASSWORD: ${PRODUCTION_DB_PASSWORD:-production-dev}
+      POSTGRES_USER: ${KITCHEN_DB_USER:-${PRODUCTION_DB_USER:-production}}
+      POSTGRES_PASSWORD: ${KITCHEN_DB_PASSWORD:-${PRODUCTION_DB_PASSWORD:-production-dev}}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -101,17 +102,17 @@ services:
       retries: 12
     volumes:
       - production-postgres-data:/var/lib/postgresql/data
-  production-service:
+  kitchen-service:
     <<: *app
     build:
       context: .
-      dockerfile: production-service/Dockerfile
+      dockerfile: kitchen-service/Dockerfile
     environment:
       <<: *environment
-      PRODUCTION_DB_USER: ${PRODUCTION_DB_USER:-production}
-      PRODUCTION_DB_PASSWORD: ${PRODUCTION_DB_PASSWORD:-production-dev}
+      KITCHEN_DB_USER: ${KITCHEN_DB_USER:-${PRODUCTION_DB_USER:-production}}
+      KITCHEN_DB_PASSWORD: ${KITCHEN_DB_PASSWORD:-${PRODUCTION_DB_PASSWORD:-production-dev}}
     depends_on:
-      production-postgres:
+      kitchen-postgres:
         condition: service_healthy
       discovery-service:
         condition: service_healthy
@@ -125,7 +126,7 @@ services:
         condition: service_healthy
       catalog-service:
         condition: service_healthy
-      production-service:
+      kitchen-service:
         condition: service_healthy
     ports:
       - "${HTTP_PORT:-8080}:8080"

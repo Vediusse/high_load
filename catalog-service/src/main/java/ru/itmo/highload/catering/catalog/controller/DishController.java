@@ -23,8 +23,8 @@ import ru.itmo.highload.catering.catalog.dto.DishCursorPageResponse;
 import ru.itmo.highload.catering.catalog.dto.DishResponse;
 import ru.itmo.highload.catering.catalog.dto.UpdateDishRequest;
 import ru.itmo.highload.catering.catalog.service.CatalogService;
-import ru.itmo.highload.catering.common.web.Pagination;
-import ru.itmo.highload.catering.common.config.StandardApiErrors;
+import ru.itmo.highload.common.web.Pagination;
+import ru.itmo.highload.common.config.StandardApiErrors;
 
 @RestController
 @RequestMapping("/api/v1/dishes")

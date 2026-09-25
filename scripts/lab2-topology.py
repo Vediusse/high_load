@@ -10,11 +10,11 @@ import uuid
 project = sys.argv[1]
 base = sys.argv[2] if len(sys.argv) > 2 else "http://localhost:18080"
 compose = ["docker", "compose", "-p", project]
-applications = {name + "-service" for name in ("config", "discovery", "gateway", "catalog", "order", "production")}
+applications = {name + "-service" for name in ("config", "discovery", "gateway", "catalog", "order", "kitchen")}
 owners = {
     "catalog": {"dish", "category", "dish_category", "flyway_schema_history"},
-    "order": {"organization", "delivery_point", "corporate_order", "order_line", "order_status_history", "production_command", "flyway_schema_history"},
-    "production": {"production_task", "flyway_schema_history"},
+    "order": {"organization", "delivery_point", "corporate_order", "order_line", "order_status_history", "kitchen_command", "flyway_schema_history"},
+    "kitchen": {"kitchen_task", "flyway_schema_history"},
 }
 services = applications | {name + "-postgres" for name in owners}
 ids = subprocess.check_output(compose + ["ps", "-q"], text=True).split()
@@ -59,7 +59,7 @@ def error(method, path, status, code, body=None):
 
 
 missing = str(uuid.uuid4())
-for path in ("/internal/v1/orders/production", "/internal/v1/production/tasks", "/internal/v1/dishes/snapshots",
+for path in ("/internal/v1/orders/kitchen", "/internal/v1/kitchen/tasks", "/internal/v1/dishes/snapshots",
              "/eureka/apps", "/actuator/env", "/api/v1/unknown", "/api/v1/dishes/" + missing, "/api/v1/orders/" + missing):
     error("GET", path, 404, "RESOURCE_NOT_FOUND")
 error("POST", f"/api/v1/orders/{missing}/start-cooking", 404, "RESOURCE_NOT_FOUND", '{"expectedVersion":0}')

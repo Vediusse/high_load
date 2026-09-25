@@ -3,3 +3,9 @@ spring:
     name: gateway-service
   config:
     import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+
+# GatewayErrors handles routing and upstream failures.
+catering:
+  web:
+    errors:
+      enabled: false

@@ -20,9 +20,9 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.itmo.highload.catering.catalog.dto.ActiveDishData;
-import ru.itmo.highload.catering.catalog.service.CatalogService;
-import ru.itmo.highload.catering.common.dto.PageResponse;
-import ru.itmo.highload.catering.common.error.ApiException;
+import ru.itmo.highload.catering.catalog.service.CatalogGateway;
+import ru.itmo.highload.common.dto.PageResponse;
+import ru.itmo.highload.common.error.ApiException;
 import ru.itmo.highload.catering.order.dto.CreateOrderRequest;
 import ru.itmo.highload.catering.order.dto.CancelOrderRequest;
 import ru.itmo.highload.catering.order.dto.OrderLineInput;
@@ -49,7 +49,7 @@ public class OrderService {
     private final CorporateOrderRepository orderRepository;
     private final OrderStatusHistoryRepository historyRepository;
     private final OrganizationService organizationService;
-    private final CatalogService catalogService;
+    private final CatalogGateway catalogGateway;
     private final Clock clock;
 
     @Transactional
@@ -91,7 +91,7 @@ public class OrderService {
         return new OrderPageResult(body, orders.getTotalElements());
     }
 
-    public PageResponse<OrderResponse> productionQueue(PageRequest request) {
+    public PageResponse<OrderResponse> kitchenQueue(PageRequest request) {
         Page<CorporateOrder> page = orderRepository.findByStatusIn(
                 Set.of(OrderStatus.CONFIRMED, OrderStatus.IN_COOKING, OrderStatus.READY),
                 request.withSort(Sort.by("id")));
@@ -124,7 +124,7 @@ public class OrderService {
         Set<UUID> dishIds = request.lines().stream()
                 .map(OrderLineInput::dishId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-        Map<UUID, ActiveDishData> activeDishes = catalogService.getActiveDishPrices(dishIds);
+        Map<UUID, ActiveDishData> activeDishes = catalogGateway.getActiveDishPrices(dishIds);
         List<CorporateOrder.DraftLine> replacements = request.lines().stream()
                 .map(line -> {
                     ActiveDishData dish = activeDishes.get(line.dishId());
@@ -163,7 +163,7 @@ public class OrderService {
             Set<UUID> dishIds = order.getLines().stream()
                     .map(OrderLine::getDishId)
                     .collect(Collectors.toCollection(LinkedHashSet::new));
-            Map<UUID, ActiveDishData> activeDishes = catalogService.getActiveDishPrices(dishIds);
+            Map<UUID, ActiveDishData> activeDishes = catalogGateway.getActiveDishPrices(dishIds);
             Map<UUID, CorporateOrder.DishSnapshot> snapshots = activeDishes.values().stream()
                     .collect(Collectors.toMap(
                             ActiveDishData::id,

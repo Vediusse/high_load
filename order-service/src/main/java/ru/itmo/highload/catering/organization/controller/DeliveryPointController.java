@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import reactor.core.publisher.Mono;
-import ru.itmo.highload.catering.common.web.BlockingRequests;
+import ru.itmo.highload.common.web.BlockingRequests;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ru.itmo.highload.catering.organization.dto.DeliveryPointResponse;
-import ru.itmo.highload.catering.common.config.StandardApiErrors;
+import ru.itmo.highload.common.config.StandardApiErrors;
 import ru.itmo.highload.catering.organization.dto.UpdateDeliveryPointRequest;
 import ru.itmo.highload.catering.organization.service.OrganizationService;
 

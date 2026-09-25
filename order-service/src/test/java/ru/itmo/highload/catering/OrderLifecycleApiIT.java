@@ -234,7 +234,7 @@ class OrderLifecycleApiIT extends AbstractPostgresIT {
 
     private String commandPath(OrderResponse order, String command) {
         return command.equals("confirm") ? "/api/v1/orders/" + order.id() + "/confirm"
-                : "/internal/v1/orders/" + order.id() + "/production-commands";
+                : "/internal/v1/orders/" + order.id() + "/kitchen-commands";
     }
 
     private Map<String, Object> commandBody(OrderResponse order, String command) {

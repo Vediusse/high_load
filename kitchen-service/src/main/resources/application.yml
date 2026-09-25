@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: kitchen-service
+  config:
+    import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+
+---
+catering:
+  blocking:
+    enabled: true
+    thread-name-prefix: kitchen-blocking

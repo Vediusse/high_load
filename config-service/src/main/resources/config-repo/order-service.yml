@@ -28,8 +28,8 @@ springdoc:
     urls:
       - name: Заказы и организации
         url: /v3/api-docs
-      - name: Производство
-        url: /v3/api-docs/production
+      - name: Кухня
+        url: /v3/api-docs/kitchen
       - name: Каталог
         url: /v3/api-docs/catalog
 
@@ -56,4 +56,4 @@ resilience4j:
         waitDurationInOpenState: 5s
         permittedNumberOfCallsInHalfOpenState: 2
         ignoreExceptions:
-          - ru.itmo.highload.catering.common.error.ApiException
+          - ru.itmo.highload.common.error.ApiException

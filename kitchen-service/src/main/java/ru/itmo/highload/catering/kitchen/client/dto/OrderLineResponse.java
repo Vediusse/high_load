@@ -1,4 +1,4 @@
-package ru.itmo.highload.catering.order.dto;
+package ru.itmo.highload.catering.kitchen.client.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.math.BigDecimal;

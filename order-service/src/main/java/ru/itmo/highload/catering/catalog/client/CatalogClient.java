@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.*;
 
 @FeignClient(name = "catalog-service", url = "${clients.catalog.url:}")
 public interface CatalogClient {
+    int MAX_SNAPSHOT_IDS = 1000;
+
     @PostMapping("/internal/v1/dishes/snapshots")
     List<DishSnapshot> snapshots(@RequestBody SnapshotRequest request, @RequestHeader("X-Trace-Id") String traceId);
     record SnapshotRequest(Set<UUID> ids) { }

@@ -9,8 +9,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -44,6 +44,9 @@ class CommonWebIT {
     @Test void preservesDefaultErrorCodesAndStatusWithTrace() {
         Object[][] cases = {{"business",422,"RULE_FAILED"},{"busy",503,"SERVICE_BUSY"},
                 {"integrity",409,"DATA_INTEGRITY_CONFLICT"},{"optimistic",409,"RESOURCE_VERSION_CONFLICT"},
+                {"database",503,"DEPENDENCY_UNAVAILABLE"},{"query-timeout",503,"DEPENDENCY_UNAVAILABLE"},
+                {"transaction-timeout",503,"DEPENDENCY_UNAVAILABLE"},
+                {"transaction-unavailable",503,"DEPENDENCY_UNAVAILABLE"},
                 {"unexpected",500,"INTERNAL_ERROR"}};
         for (Object[] test : cases) {
             client.get().uri("/api/v1/errors/"+test[0]).header("X-Trace-Id", "error-trace").exchange()
@@ -82,6 +85,11 @@ class CommonWebIT {
                 case "busy" -> new RejectedExecutionException();
                 case "integrity" -> new DataIntegrityViolationException("test constraint");
                 case "optimistic" -> new OptimisticLockingFailureException("test version");
+                case "database" -> new org.springframework.dao.DataAccessResourceFailureException("database down");
+                case "query-timeout" -> new org.springframework.dao.QueryTimeoutException("query timeout");
+                case "transaction-timeout" -> new org.springframework.transaction.TransactionTimedOutException("transaction timeout");
+                case "transaction-unavailable" -> new org.springframework.transaction.CannotCreateTransactionException(
+                        "Could not open EntityManager", new java.sql.SQLTransientConnectionException("database down"));
                 default -> new IllegalStateException("test unexpected");
             };
         }

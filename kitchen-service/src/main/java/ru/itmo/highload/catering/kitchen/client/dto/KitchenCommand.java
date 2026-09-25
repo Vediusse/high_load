@@ -1,9 +1,9 @@
-package ru.itmo.highload.catering.order.dto;
+package ru.itmo.highload.catering.kitchen.client.dto;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.util.UUID;
-import ru.itmo.highload.catering.order.entity.OrderStatus;
+import ru.itmo.highload.catering.kitchen.client.dto.OrderStatus;
 
 public record KitchenCommand(
         @NotNull UUID commandId,

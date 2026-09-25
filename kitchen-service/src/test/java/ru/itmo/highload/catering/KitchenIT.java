@@ -3,6 +3,7 @@ package ru.itmo.highload.catering;
 import static org.assertj.core.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.resilience4j.circuitbreaker.*;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -16,10 +17,9 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
-import ru.itmo.highload.catering.order.dto.OrderResponse;
-import ru.itmo.highload.catering.order.entity.OrderStatus;
+import ru.itmo.highload.catering.kitchen.client.dto.OrderResponse;
+import ru.itmo.highload.catering.kitchen.client.dto.OrderStatus;
 import ru.itmo.highload.catering.kitchen.service.TaskProjection;
-import io.github.resilience4j.circuitbreaker.*;
 
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT, useMainMethod=SpringBootTest.UseMainMethod.ALWAYS)
 @org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient
@@ -91,8 +91,36 @@ class KitchenIT {
         int before=owner.calls.get();queue(0,20,503);command(order,"start-cooking",503,null);
         assertThat(owner.calls.get()).isEqualTo(before);assertTask(order.id(),"CONFIRMED",order.version());
         owner.mode="normal";Thread.sleep(5100);
-        // queue performs the two permitted probes: page and known task.
+        // queue performs the two permitted probes: page and bounded state batch.
         queue(0,20,200);assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+    }
+
+    @Test void reconciliationIsBoundedAndEventuallyChecksTasksOutsideTheRequestedPage() {
+        var known = java.util.stream.IntStream.range(0, 120)
+                .mapToObj(i -> owner.add(OrderStatus.CONFIRMED)).toList();
+        known.forEach(projection::observe);
+        known.forEach(order -> owner.state(order, OrderStatus.CANCELLED));
+        owner.calls.set(0);
+        for (int attempt = 0; attempt < 3; attempt++) {
+            queue(0, 1, 200);
+            assertThat(owner.calls.get()).isEqualTo((attempt + 1) * 2);
+            assertThat(jdbc.queryForObject("select count(*) from kitchen_task where status='CANCELLED'", Integer.class))
+                    .isEqualTo(Math.min((attempt + 1) * 50, 120));
+        }
+    }
+
+    @Test void unchangedTasksDoNotStarveLaterTasksAndIncompleteBatchCannotUpdateProjection() {
+        var known = java.util.stream.IntStream.range(0, 60)
+                .mapToObj(i -> owner.add(OrderStatus.CONFIRMED)).toList();
+        known.forEach(projection::observe);
+        var cancelled = owner.state(known.getLast(), OrderStatus.CANCELLED);
+        queue(0, 1, 200);
+        queue(0, 1, 200);
+        assertTask(cancelled.id(), "CANCELLED", cancelled.version());
+        var another = owner.state(known.getFirst(), OrderStatus.CANCELLED);
+        owner.mode = "incomplete-states";
+        queue(0, 1, 503);
+        assertTask(another.id(), "CONFIRMED", known.getFirst().version());
     }
 
     @Test void timeoutIsFiniteAndFeignDoesNotRetry() {

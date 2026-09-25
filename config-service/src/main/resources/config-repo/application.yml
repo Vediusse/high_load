@@ -15,7 +15,6 @@ management:
 info:
   configuration:
     source: config-service
-    revision: l2.2
 eureka:
   client:
     service-url:

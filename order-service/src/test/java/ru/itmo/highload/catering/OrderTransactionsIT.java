@@ -37,6 +37,29 @@ class OrderTransactionsIT extends AbstractPostgresIT {
     @Autowired
     DeliveryPointRepository deliveryPointRepository;
 
+    @Autowired
+    ru.itmo.highload.catering.catalog.service.CatalogGateway catalogGateway;
+
+    @Test
+    void largeCatalogReadUsesBoundedBatchesAndFailureCannotPartiallyReplaceOrder() {
+        var ids = new java.util.LinkedHashSet<UUID>();
+        for (int i = 0; i < 1001; i++) ids.add(dish("Блюдо " + i, "100.00").getId());
+        assertThat(catalogGateway.getActiveDishPrices(ids).keySet()).containsExactlyInAnyOrderElementsOf(ids);
+        assertThat(catalog.batchSizes).containsExactly(1000, 1);
+
+        var draft = createDraft(fixture());
+        var missingLast = new java.util.ArrayList<>(ids.stream().limit(1000)
+                .map(id -> new OrderLineInput(id, 1)).toList());
+        missingLast.add(new OrderLineInput(UUID.randomUUID(), 1));
+        catalog.batchSizes.clear();
+        assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(),
+                new ReplaceOrderLinesRequest(draft.version(), missingLast)))
+                .isInstanceOfSatisfying(ApiException.class, error ->
+                        assertThat(error.getCode()).isEqualTo("RESOURCE_NOT_FOUND"));
+        assertThat(catalog.batchSizes).containsExactly(1000, 1);
+        assertThat(orderService.getOrder(draft.id())).isEqualTo(draft);
+    }
+
 
     @Test
     void failedLineReplacementKeepsPreviousCompositionCompletely() {

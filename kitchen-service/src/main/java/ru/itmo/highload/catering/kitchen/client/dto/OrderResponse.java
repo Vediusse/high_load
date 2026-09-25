@@ -1,10 +1,10 @@
-package ru.itmo.highload.catering.order.dto;
+package ru.itmo.highload.catering.kitchen.client.dto;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
-import ru.itmo.highload.catering.order.entity.OrderStatus;
+import ru.itmo.highload.catering.kitchen.client.dto.OrderStatus;
 
 public record OrderResponse(
         UUID id,

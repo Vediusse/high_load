@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import ru.itmo.highload.catering.order.entity.OrderStatus;
+import ru.itmo.highload.catering.kitchen.client.dto.OrderStatus;
 
 @Entity
 @Table(name = "kitchen_task")

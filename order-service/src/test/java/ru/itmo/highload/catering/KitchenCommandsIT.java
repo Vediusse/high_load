@@ -11,12 +11,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import ru.itmo.highload.common.error.ApiException;
 import ru.itmo.highload.catering.order.dto.*;
 import ru.itmo.highload.catering.order.entity.OrderStatus;
 import ru.itmo.highload.catering.order.service.*;
 import ru.itmo.highload.catering.organization.entity.*;
 import ru.itmo.highload.catering.organization.repository.*;
+import ru.itmo.highload.common.error.ApiException;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient
@@ -26,6 +26,26 @@ class KitchenCommandsIT extends AbstractPostgresIT {
     @Autowired OrganizationRepository organizations;
     @Autowired DeliveryPointRepository points;
     @Autowired WebTestClient client;
+
+    @Test
+    void stateBatchIsBoundedAndReturnsOnlyOwnerState() {
+        var first = confirmed();
+        var second = confirmed();
+        client.post().uri("/internal/v1/orders/states")
+                .bodyValue(Map.of("ids", List.of(first.id(), second.id())))
+                .exchange().expectStatus().isOk().expectBody()
+                .jsonPath("$.length()").isEqualTo(2)
+                .jsonPath("$[*].status").value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is("CONFIRMED")))
+                .jsonPath("$[0].lines").doesNotExist();
+        for (var ids : List.of(List.of(), java.util.stream.IntStream.range(0, 51)
+                .mapToObj(i -> UUID.randomUUID()).toList())) {
+            client.post().uri("/internal/v1/orders/states").bodyValue(Map.of("ids", ids))
+                    .exchange().expectStatus().isBadRequest();
+        }
+        client.post().uri("/internal/v1/orders/states")
+                .bodyValue(Map.of("ids", List.of(first.id(), UUID.randomUUID())))
+                .exchange().expectStatus().isNotFound();
+    }
 
     @Test
     void concurrentDuplicatesExecuteOnceAndReplayOriginalResultAfterFurtherTransitions() throws Exception {

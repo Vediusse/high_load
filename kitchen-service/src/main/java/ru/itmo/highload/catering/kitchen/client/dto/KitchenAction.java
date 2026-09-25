@@ -1,6 +1,6 @@
-package ru.itmo.highload.catering.order.dto;
+package ru.itmo.highload.catering.kitchen.client.dto;
 
-import ru.itmo.highload.catering.order.entity.OrderStatus;
+import ru.itmo.highload.catering.kitchen.client.dto.OrderStatus;
 
 public enum KitchenAction {
     START_COOKING(OrderStatus.CONFIRMED), MARK_READY(OrderStatus.IN_COOKING), COMPLETE(OrderStatus.READY);

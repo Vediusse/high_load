@@ -21,14 +21,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.itmo.highload.catering.catalog.dto.ActiveDishData;
 import ru.itmo.highload.catering.catalog.service.CatalogGateway;
-import ru.itmo.highload.common.dto.PageResponse;
-import ru.itmo.highload.common.error.ApiException;
-import ru.itmo.highload.catering.order.dto.CreateOrderRequest;
 import ru.itmo.highload.catering.order.dto.CancelOrderRequest;
+import ru.itmo.highload.catering.order.dto.CreateOrderRequest;
 import ru.itmo.highload.catering.order.dto.OrderLineInput;
 import ru.itmo.highload.catering.order.dto.OrderLineResponse;
 import ru.itmo.highload.catering.order.dto.OrderPageResult;
 import ru.itmo.highload.catering.order.dto.OrderResponse;
+import ru.itmo.highload.catering.order.dto.OrderState;
 import ru.itmo.highload.catering.order.dto.OrderStatusHistoryResponse;
 import ru.itmo.highload.catering.order.dto.RejectOrderRequest;
 import ru.itmo.highload.catering.order.dto.ReplaceOrderLinesRequest;
@@ -40,6 +39,8 @@ import ru.itmo.highload.catering.order.entity.OrderStatusHistory;
 import ru.itmo.highload.catering.order.repository.CorporateOrderRepository;
 import ru.itmo.highload.catering.order.repository.OrderStatusHistoryRepository;
 import ru.itmo.highload.catering.organization.service.OrganizationService;
+import ru.itmo.highload.common.dto.PageResponse;
+import ru.itmo.highload.common.error.ApiException;
 
 @Service
 @Transactional(readOnly = true)
@@ -68,6 +69,15 @@ public class OrderService {
 
     public OrderResponse getOrder(UUID id) {
         return toResponse(requireOrder(id));
+    }
+
+    public List<OrderState> states(Set<UUID> ids) {
+        var found = orderRepository.findAllById(ids);
+        if (found.size() != ids.size()) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Один из заказов не найден");
+        }
+        return found.stream().map(order -> new OrderState(
+                order.getId(), order.getStatus(), order.getVersion())).toList();
     }
 
     public OrderPageResult listOrders(

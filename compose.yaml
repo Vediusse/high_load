@@ -1,3 +1,5 @@
+name: corporate-catering
+
 x-app: &app
   mem_limit: 512m
   stop_grace_period: 45s
@@ -38,7 +40,7 @@ services:
     environment:
       POSTGRES_DB: ${ORDER_DB_NAME:-orders}
       POSTGRES_USER: ${ORDER_DB_USER:-orders}
-      POSTGRES_PASSWORD: ${ORDER_DB_PASSWORD:-orders-dev}
+      POSTGRES_PASSWORD: ${ORDER_DB_PASSWORD:?Set ORDER_DB_PASSWORD in .env}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -51,7 +53,7 @@ services:
     environment:
       POSTGRES_DB: catalog
       POSTGRES_USER: ${CATALOG_DB_USER:-catalog}
-      POSTGRES_PASSWORD: ${CATALOG_DB_PASSWORD:-catalog-dev}
+      POSTGRES_PASSWORD: ${CATALOG_DB_PASSWORD:?Set CATALOG_DB_PASSWORD in .env}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -67,7 +69,7 @@ services:
     environment:
       <<: *environment
       CATALOG_DB_USER: ${CATALOG_DB_USER:-catalog}
-      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD:-catalog-dev}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD:?Set CATALOG_DB_PASSWORD in .env}
     depends_on:
       catalog-postgres:
         condition: service_healthy
@@ -80,9 +82,9 @@ services:
       dockerfile: order-service/Dockerfile
     environment:
       <<: *environment
-      DB_URL: jdbc:postgresql://order-postgres:5432/${ORDER_DB_NAME:-orders}
-      DB_USER: ${ORDER_DB_USER:-orders}
-      DB_PASSWORD: ${ORDER_DB_PASSWORD:-orders-dev}
+      ORDER_DB_URL: jdbc:postgresql://order-postgres:5432/${ORDER_DB_NAME:-orders}
+      ORDER_DB_USER: ${ORDER_DB_USER:-orders}
+      ORDER_DB_PASSWORD: ${ORDER_DB_PASSWORD:?Set ORDER_DB_PASSWORD in .env}
     depends_on:
       order-postgres:
         condition: service_healthy
@@ -93,8 +95,8 @@ services:
     image: postgres:17.11-alpine3.24
     environment:
       POSTGRES_DB: production
-      POSTGRES_USER: ${KITCHEN_DB_USER:-${PRODUCTION_DB_USER:-production}}
-      POSTGRES_PASSWORD: ${KITCHEN_DB_PASSWORD:-${PRODUCTION_DB_PASSWORD:-production-dev}}
+      POSTGRES_USER: ${KITCHEN_DB_USER:-production}
+      POSTGRES_PASSWORD: ${KITCHEN_DB_PASSWORD:?Set KITCHEN_DB_PASSWORD in .env}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -109,8 +111,8 @@ services:
       dockerfile: kitchen-service/Dockerfile
     environment:
       <<: *environment
-      KITCHEN_DB_USER: ${KITCHEN_DB_USER:-${PRODUCTION_DB_USER:-production}}
-      KITCHEN_DB_PASSWORD: ${KITCHEN_DB_PASSWORD:-${PRODUCTION_DB_PASSWORD:-production-dev}}
+      KITCHEN_DB_USER: ${KITCHEN_DB_USER:-production}
+      KITCHEN_DB_PASSWORD: ${KITCHEN_DB_PASSWORD:?Set KITCHEN_DB_PASSWORD in .env}
     depends_on:
       kitchen-postgres:
         condition: service_healthy

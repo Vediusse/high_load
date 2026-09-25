@@ -8,10 +8,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
+import ru.itmo.highload.catering.kitchen.client.dto.*;
+import ru.itmo.highload.catering.kitchen.dto.OrderCommandRequest;
+import ru.itmo.highload.catering.kitchen.service.KitchenService;
 import ru.itmo.highload.common.config.StandardApiErrors;
 import ru.itmo.highload.common.web.BlockingRequests;
-import ru.itmo.highload.catering.order.dto.*;
-import ru.itmo.highload.catering.kitchen.service.KitchenService;
 
 @RestController
 @RequestMapping("/api/v1/orders")

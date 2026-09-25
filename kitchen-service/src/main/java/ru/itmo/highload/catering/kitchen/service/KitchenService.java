@@ -1,11 +1,13 @@
 package ru.itmo.highload.catering.kitchen.service;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import ru.itmo.highload.catering.kitchen.client.dto.*;
 import ru.itmo.highload.common.dto.PageResponse;
-import ru.itmo.highload.catering.order.dto.*;
 
 @Service
 @RequiredArgsConstructor
@@ -28,15 +30,11 @@ public class KitchenService {
 
     public PageResponse<OrderResponse> queue(int page, int size) {
         var result = orders.queue(page, size);
-        // A missing entry on one remote page does not prove cancellation. Ask the owner for each known task.
-        UUID afterId = null;
-        while (true) {
-            var ids = tasks.activeIdsAfter(afterId);
-            if (ids.isEmpty()) break;
-            for (UUID id : ids) tasks.observe(orders.get(id));
-            afterId = ids.getLast();
-        }
-        result.items().forEach(tasks::observe);
+        // Reconcile one bounded batch, oldest observations first. The returned queue is always read from its owner.
+        var ids = new HashSet<>(tasks.oldestActiveIds());
+        var observed = new ArrayList<>(orders.states(ids));
+        result.items().forEach(order -> observed.add(new OrderState(order.id(), order.status(), order.version())));
+        tasks.observeStates(observed);
         return result;
     }
 }

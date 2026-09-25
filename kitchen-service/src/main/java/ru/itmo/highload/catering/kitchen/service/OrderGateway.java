@@ -3,6 +3,8 @@ package ru.itmo.highload.catering.kitchen.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.FeignException;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -11,12 +13,11 @@ import org.slf4j.MDC;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import ru.itmo.highload.catering.kitchen.client.OrderClient;
+import ru.itmo.highload.catering.kitchen.client.dto.*;
 import ru.itmo.highload.common.dto.PageResponse;
 import ru.itmo.highload.common.error.ApiError;
 import ru.itmo.highload.common.error.ApiException;
-import ru.itmo.highload.catering.order.dto.*;
-import ru.itmo.highload.catering.order.entity.OrderStatus;
-import ru.itmo.highload.catering.kitchen.client.OrderClient;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +30,24 @@ public class OrderGateway {
 
     public OrderResponse get(UUID id) {
         return call(() -> validate(client.get(id, trace()), id));
+    }
+
+    public List<OrderState> states(Set<UUID> ids) {
+        if (ids.isEmpty()) return List.of();
+        return call(() -> {
+            var result = client.states(new OrderStatesRequest(ids), trace());
+            if (result == null || result.size() != ids.size()) {
+                throw new IllegalStateException("Incomplete order states");
+            }
+            Set<UUID> received = new HashSet<>();
+            for (var state : result) {
+                if (state == null || !ids.contains(state.id()) || state.status() == null
+                        || state.version() < 0 || !received.add(state.id())) {
+                    throw new IllegalStateException("Invalid order state");
+                }
+            }
+            return result;
+        });
     }
 
     public OrderResponse command(UUID id, KitchenCommand command) {
@@ -53,7 +72,7 @@ public class OrderGateway {
                     || result.items().size() > size || (result.hasNext() && result.items().size() != size)) {
                 throw new IllegalStateException("Invalid queue response");
             }
-            Set<UUID> ids = new java.util.HashSet<>();
+            Set<UUID> ids = new HashSet<>();
             for (var order : result.items()) {
                 validate(order, order == null ? null : order.id());
                 if (!Set.of(OrderStatus.CONFIRMED, OrderStatus.IN_COOKING, OrderStatus.READY).contains(order.status())

@@ -10,9 +10,9 @@ import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import ru.itmo.highload.catering.kitchen.client.dto.*;
+import ru.itmo.highload.catering.kitchen.client.dto.OrderStatus;
 import ru.itmo.highload.common.dto.PageResponse;
-import ru.itmo.highload.catering.order.dto.*;
-import ru.itmo.highload.catering.order.entity.OrderStatus;
 
 // Real HTTP partner for failure injection. Compose checks use the actual Order application.
 final class OrderFixture {
@@ -57,6 +57,13 @@ final class OrderFixture {
             if (mode.equals("malformed")) {send(exchange,200,Map.of("id",UUID.randomUUID()));return;}
             if (mode.equals("bad-error")) {send(exchange,409,Map.of("code","UNKNOWN"));return;}
             String path=exchange.getRequestURI().getPath();
+            if (path.endsWith("/states")) {
+                var request = mapper.readValue(exchange.getRequestBody(), OrderStatesRequest.class);
+                var states = request.ids().stream().map(orders::get)
+                        .map(order -> new OrderState(order.id(), order.status(), order.version())).toList();
+                send(exchange, 200, mode.equals("incomplete-states") ? List.of() : states);
+                return;
+            }
             if (path.endsWith("/kitchen")) {
                 Map<String,String> query=new HashMap<>();
                 for(String pair:exchange.getRequestURI().getQuery().split("&")){String[]parts=pair.split("=");query.put(parts[0],parts[1]);}

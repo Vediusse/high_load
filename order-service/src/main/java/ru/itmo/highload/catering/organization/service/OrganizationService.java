@@ -5,11 +5,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.itmo.highload.common.dto.PageResponse;
-import ru.itmo.highload.common.error.ApiException;
 import ru.itmo.highload.catering.organization.dto.ActiveOrderParty;
 import ru.itmo.highload.catering.organization.dto.CreateDeliveryPointRequest;
 import ru.itmo.highload.catering.organization.dto.CreateOrganizationRequest;
@@ -22,6 +21,8 @@ import ru.itmo.highload.catering.organization.entity.DeliveryPoint;
 import ru.itmo.highload.catering.organization.entity.Organization;
 import ru.itmo.highload.catering.organization.repository.DeliveryPointRepository;
 import ru.itmo.highload.catering.organization.repository.OrganizationRepository;
+import ru.itmo.highload.common.dto.PageResponse;
+import ru.itmo.highload.common.error.ApiException;
 
 @Service
 @Transactional(readOnly = true)
@@ -56,7 +57,7 @@ public class OrganizationService {
     }
 
     public OrganizationPageResult listOrganizations(PageRequest pageRequest) {
-        Page<Organization> page = organizationRepository.findAll(pageRequest);
+        Page<Organization> page = organizationRepository.findAll(pageRequest.withSort(Sort.by("id")));
         PageResponse<OrganizationResponse> body = new PageResponse<>(
                 page.getContent().stream().map(this::toResponse).toList(),
                 page.getNumber(),
@@ -115,7 +116,7 @@ public class OrganizationService {
 
     public PageResponse<DeliveryPointResponse> listDeliveryPoints(UUID organizationId, PageRequest pageRequest) {
         requireOrganization(organizationId);
-        Slice<DeliveryPoint> slice = deliveryPointRepository.findAllByOrganizationId(organizationId, pageRequest);
+        Slice<DeliveryPoint> slice = deliveryPointRepository.findAllByOrganizationId(organizationId, pageRequest.withSort(Sort.by("id")));
         return new PageResponse<>(
                 slice.getContent().stream().map(this::toResponse).toList(),
                 slice.getNumber(),

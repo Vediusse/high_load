@@ -28,10 +28,18 @@ public class CatalogGateway {
         if (ids.isEmpty()) return Map.of();
         String traceId = org.slf4j.MDC.get("traceId");
         String propagatedTrace = traceId == null ? UUID.randomUUID().toString() : traceId;
-        return breakers.create("catalog").run(() -> fetch(ids, propagatedTrace), error -> {
-            if (error instanceof ApiException api) throw api;
-            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "DEPENDENCY_UNAVAILABLE", "Каталог временно недоступен");
-        });
+        var requested = new ArrayList<>(ids);
+        Map<UUID, ActiveDishData> result = new LinkedHashMap<>();
+        for (int offset = 0; offset < requested.size(); offset += CatalogClient.MAX_SNAPSHOT_IDS) {
+            Set<UUID> batch = new LinkedHashSet<>(requested.subList(offset,
+                    Math.min(offset + CatalogClient.MAX_SNAPSHOT_IDS, requested.size())));
+            var snapshots = breakers.create("catalog").run(() -> fetch(batch, propagatedTrace), error -> {
+                if (error instanceof ApiException api) throw api;
+                throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "DEPENDENCY_UNAVAILABLE", "Каталог временно недоступен");
+            });
+            result.putAll(snapshots);
+        }
+        return result;
     }
 
     private Map<UUID, ActiveDishData> fetch(Set<UUID> ids, String traceId) {

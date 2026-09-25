@@ -14,6 +14,15 @@ import org.springframework.web.server.ServerWebExchange;
 @RestControllerAdvice
 @org.springframework.core.annotation.Order(org.springframework.core.Ordered.LOWEST_PRECEDENCE - 10)
 public class PersistenceExceptionHandler {
+    @ExceptionHandler({org.springframework.dao.DataAccessResourceFailureException.class,
+            org.springframework.dao.QueryTimeoutException.class,
+            org.springframework.transaction.CannotCreateTransactionException.class,
+            org.springframework.transaction.TransactionTimedOutException.class})
+    ResponseEntity<ApiError> unavailable(RuntimeException error, ServerWebExchange exchange) {
+        return response(HttpStatus.SERVICE_UNAVAILABLE, "DEPENDENCY_UNAVAILABLE",
+                "Хранилище временно недоступно", List.of(), exchange);
+    }
+
     @ExceptionHandler(OptimisticLockingFailureException.class)
     ResponseEntity<ApiError> optimistic(OptimisticLockingFailureException error, ServerWebExchange exchange) {
         return response(HttpStatus.CONFLICT, "RESOURCE_VERSION_CONFLICT", "Объект был изменён параллельно", List.of(), exchange);

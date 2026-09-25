@@ -6,9 +6,11 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.itmo.highload.catering.order.dto.OrderResponse;
-import ru.itmo.highload.catering.order.entity.OrderStatus;
+import ru.itmo.highload.catering.kitchen.client.dto.OrderResponse;
+import ru.itmo.highload.catering.kitchen.client.dto.OrderState;
+import ru.itmo.highload.catering.kitchen.client.dto.OrderStatus;
 import ru.itmo.highload.catering.kitchen.repository.KitchenTaskRepository;
+import ru.itmo.highload.common.web.Pagination;
 
 @Service
 @RequiredArgsConstructor
@@ -24,5 +26,10 @@ public class TaskProjection {
     }
 
     @Transactional(readOnly = true)
-    public List<UUID> activeIdsAfter(UUID afterId) { return tasks.activeIdsAfter(afterId); }
+    public List<UUID> oldestActiveIds() { return tasks.oldestActiveIds(Pagination.MAX_SIZE); }
+
+    @Transactional
+    public void observeStates(List<OrderState> states) {
+        states.forEach(state -> tasks.observe(state.id(), state.status().name(), state.version()));
+    }
 }

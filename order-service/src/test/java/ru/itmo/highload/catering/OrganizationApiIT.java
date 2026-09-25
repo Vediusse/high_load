@@ -7,12 +7,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.test.web.reactive.server.EntityExchangeResult;
-import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.reactive.server.EntityExchangeResult;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient
@@ -23,6 +23,35 @@ class OrganizationApiIT extends AbstractPostgresIT {
 
     @Autowired
     ObjectMapper objectMapper;
+
+    @Test
+    void organizationAndPointPagesHaveStableOrderAfterUpdates() throws Exception {
+        var organizations = new java.util.ArrayList<String>();
+        for (int i = 0; i < 3; i++) {
+            organizations.add(createOrganization("Компания " + i, "+79991234567").get("id").asText());
+        }
+        organizations.sort(String::compareTo);
+        String organization = organizations.getFirst();
+        client.put().uri("/api/v1/organizations/" + organization)
+                .bodyValue(Map.of("name", "Новое название", "phone", "+79991234567"))
+                .exchange().expectStatus().isOk();
+        var points = new java.util.ArrayList<String>();
+        for (int i = 0; i < 3; i++) {
+            var point = client.post().uri("/api/v1/organizations/" + organization + "/delivery-points")
+                    .bodyValue(pointPayload("Офис " + i)).exchange().expectStatus().isCreated()
+                    .expectBody(JsonNode.class).returnResult().getResponseBody();
+            points.add(point.get("id").asText());
+        }
+        points.sort(String::compareTo);
+        client.put().uri("/api/v1/delivery-points/" + points.getFirst()).bodyValue(pointPayload("Новый офис"))
+                .exchange().expectStatus().isOk();
+        for (int page = 0; page < 3; page++) {
+            client.get().uri("/api/v1/organizations?size=1&page=" + page).exchange().expectStatus().isOk()
+                    .expectBody().jsonPath("$.items[0].id").isEqualTo(organizations.get(page));
+            client.get().uri("/api/v1/organizations/" + organization + "/delivery-points?size=1&page=" + page)
+                    .exchange().expectStatus().isOk().expectBody().jsonPath("$.items[0].id").isEqualTo(points.get(page));
+        }
+    }
 
     @Test
     void organizationAndDeliveryPointCrudUsesDtosAndPagination() throws Exception {

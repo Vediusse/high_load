@@ -1,4 +1,4 @@
-package ru.itmo.highload.catering.order.entity;
+package ru.itmo.highload.catering.kitchen.client.dto;
 
 public enum OrderStatus {
     DRAFT,

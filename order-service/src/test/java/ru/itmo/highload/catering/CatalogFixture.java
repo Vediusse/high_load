@@ -18,6 +18,7 @@ class CatalogFixture {
     volatile boolean incomplete;
     volatile String lastTrace;
     final AtomicInteger requests = new AtomicInteger();
+    final List<Integer> batchSizes = new java.util.concurrent.CopyOnWriteArrayList<>();
     CatalogFixture() {
         try {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -28,6 +29,7 @@ class CatalogFixture {
                 requests.incrementAndGet();
                 lastTrace = exchange.getRequestHeaders().getFirst("X-Trace-Id");
                 var ids = mapper.readTree(exchange.getRequestBody()).get("ids");
+                batchSizes.add(ids.size());
                 int status = failureStatus == 0 ? 200 : failureStatus;
                 Object body = Map.of("code", "INTERNAL_ERROR", "message", "unavailable", "fieldErrors", List.of(), "traceId", "fixture");
                 List<Map<String, Object>> snapshots = new ArrayList<>();
@@ -57,7 +59,7 @@ class CatalogFixture {
         } catch (java.io.IOException error) { throw new IllegalStateException(error); }
     }
     String url() { return "http://127.0.0.1:" + server.getAddress().getPort(); }
-    void reset() { dishes.clear(); failureStatus = 0; delayMillis = 0; incomplete = false; requests.set(0); }
+    void reset() { dishes.clear(); failureStatus = 0; delayMillis = 0; incomplete = false; requests.set(0); batchSizes.clear(); }
     Dish dish(String name, String price) {
         Dish dish = new Dish(name, new BigDecimal(price)); dishes.put(dish.id, dish); return dish;
     }

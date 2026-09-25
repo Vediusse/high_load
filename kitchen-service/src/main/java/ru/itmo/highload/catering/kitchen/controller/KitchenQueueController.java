@@ -4,11 +4,11 @@ import io.swagger.v3.oas.annotations.Hidden;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
+import ru.itmo.highload.catering.kitchen.client.dto.OrderResponse;
+import ru.itmo.highload.catering.kitchen.service.KitchenService;
 import ru.itmo.highload.common.dto.PageResponse;
 import ru.itmo.highload.common.web.BlockingRequests;
 import ru.itmo.highload.common.web.Pagination;
-import ru.itmo.highload.catering.order.dto.OrderResponse;
-import ru.itmo.highload.catering.kitchen.service.KitchenService;
 
 @Hidden
 @RestController

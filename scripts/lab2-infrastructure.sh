@@ -30,7 +30,7 @@ done
 for service in order-service catalog-service kitchen-service gateway-service; do
     docker compose -p "$project" exec -T config-service \
         wget -qO- "http://$service:8080/actuator/info" \
-        | jq -e '.configuration.source == "config-service" and .configuration.revision == "l2.2"' >/dev/null
+        | jq -e '.configuration.source == "config-service"' >/dev/null
 done
 
 docker compose -p "$project" config --format json \

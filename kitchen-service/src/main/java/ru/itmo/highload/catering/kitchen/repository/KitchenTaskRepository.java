@@ -11,17 +11,18 @@ public interface KitchenTaskRepository extends JpaRepository<KitchenTask, UUID> 
     @Query(value = """
             insert into kitchen_task (order_id, status, order_version, updated_at, version)
             values (:id, :status, :orderVersion, now(), 0)
-            on conflict (order_id) do update set status = excluded.status,
+            on conflict (order_id) do update set status = case
+                when kitchen_task.order_version < excluded.order_version then excluded.status
+                else kitchen_task.status end,
                 order_version = excluded.order_version, updated_at = now(), version = kitchen_task.version + 1
-            where kitchen_task.order_version < excluded.order_version
+            where kitchen_task.order_version <= excluded.order_version
             """, nativeQuery = true)
     void observe(@Param("id") UUID id, @Param("status") String status, @Param("orderVersion") long version);
 
     @Query(value = """
             select order_id from kitchen_task
             where status in ('CONFIRMED', 'IN_COOKING', 'READY')
-                and (cast(:afterId as uuid) is null or order_id > :afterId)
-            order by order_id limit 50
+            order by updated_at, order_id limit :limit
             """, nativeQuery = true)
-    List<UUID> activeIdsAfter(@Param("afterId") UUID afterId);
+    List<UUID> oldestActiveIds(@Param("limit") int limit);
 }

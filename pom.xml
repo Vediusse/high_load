@@ -17,6 +17,7 @@
         <module>gateway-service</module>
         <module>catalog-service</module>
         <module>order-service</module>
+        <module>production-service</module>
     </modules>
     <properties>
         <java.version>21</java.version>

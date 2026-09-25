@@ -204,9 +204,9 @@ class OrderLifecycleApiIT extends AbstractPostgresIT {
     }
 
     private OrderResponse command(OrderResponse order, String command, String expectedStatus) throws Exception {
-        JsonNode response = body(client.post().uri(UriComponentsBuilder.fromPath("/api/v1/orders/{id}/{command}").buildAndExpand(order.id(), command).toUriString())
+        JsonNode response = body(client.post().uri(commandPath(order, command))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .bodyValue(json(Map.of("expectedVersion", order.version()))).exchange()
+                        .bodyValue(json(commandBody(order, command))).exchange()
                 .expectStatus().isEqualTo(200)
                 .expectBody().jsonPath("$.status").isEqualTo(expectedStatus).returnResult());
         return new OrderResponse(
@@ -224,12 +224,28 @@ class OrderLifecycleApiIT extends AbstractPostgresIT {
 
     private void assertStatusConflict(OrderResponse order, String command) throws Exception {
         int historyBefore = historyCount(order.id());
-        client.post().uri(UriComponentsBuilder.fromPath("/api/v1/orders/{id}/{command}").buildAndExpand(order.id(), command).toUriString())
+        client.post().uri(commandPath(order, command))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .bodyValue(json(Map.of("expectedVersion", order.version()))).exchange()
+                        .bodyValue(json(commandBody(order, command))).exchange()
                 .expectStatus().isEqualTo(409)
                 .expectBody().jsonPath("$.code").isEqualTo("ORDER_STATUS_CONFLICT");
         assertOrderState(order.id(), order.status().name(), order.version(), historyBefore);
+    }
+
+    private String commandPath(OrderResponse order, String command) {
+        return command.equals("confirm") ? "/api/v1/orders/" + order.id() + "/confirm"
+                : "/internal/v1/orders/" + order.id() + "/production-commands";
+    }
+
+    private Map<String, Object> commandBody(OrderResponse order, String command) {
+        if (command.equals("confirm")) return Map.of("expectedVersion", order.version());
+        String expected = switch (command) {
+            case "start-cooking" -> "CONFIRMED";
+            case "mark-ready" -> "IN_COOKING";
+            default -> "READY";
+        };
+        return Map.of("commandId", UUID.randomUUID(), "expectedVersion", order.version(),
+                "expectedStatus", expected, "action", command.toUpperCase().replace('-', '_'));
     }
 
     private JsonNode cancel(OrderResponse order, String reason) throws Exception {

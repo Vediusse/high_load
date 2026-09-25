@@ -40,6 +40,12 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiError> integrity(DataIntegrityViolationException error, ServerWebExchange exchange) {
         return response(HttpStatus.CONFLICT, "DATA_INTEGRITY_CONFLICT", "Изменение конфликтует с текущими данными", List.of(), exchange);
     }
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    ResponseEntity<ApiError> routing(org.springframework.web.server.ResponseStatusException error, ServerWebExchange exchange) {
+        HttpStatus status = HttpStatus.valueOf(error.getStatusCode().value());
+        String code = status == HttpStatus.NOT_FOUND ? "RESOURCE_NOT_FOUND" : "HTTP_" + status.value();
+        return response(status, code, status.getReasonPhrase(), List.of(), exchange);
+    }
     @ExceptionHandler(Exception.class)
     ResponseEntity<ApiError> unexpected(Exception error, ServerWebExchange exchange) {
         org.slf4j.LoggerFactory.getLogger(getClass()).error("Request failed, traceId={}", exchange.getAttribute("traceId"), error);

@@ -144,30 +144,6 @@ public class OrderController {
         return blocking.call(() -> ResponseEntity.ok(orderService.cancel(id, request)));
     }
 
-    @PostMapping("/{id}/start-cooking")
-    @Operation(summary = "Начать приготовление подтверждённого заказа")
-    public Mono<ResponseEntity<OrderResponse>> startCooking(
-            @PathVariable UUID id,
-            @Valid @RequestBody OrderCommandRequest request) {
-        return blocking.call(() -> ResponseEntity.ok(orderService.startCooking(id, request.expectedVersion())));
-    }
-
-    @PostMapping("/{id}/mark-ready")
-    @Operation(summary = "Отметить заказ готовым")
-    public Mono<ResponseEntity<OrderResponse>> markReady(
-            @PathVariable UUID id,
-            @Valid @RequestBody OrderCommandRequest request) {
-        return blocking.call(() -> ResponseEntity.ok(orderService.markReady(id, request.expectedVersion())));
-    }
-
-    @PostMapping("/{id}/complete")
-    @Operation(summary = "Завершить выданный заказ")
-    public Mono<ResponseEntity<OrderResponse>> complete(
-            @PathVariable UUID id,
-            @Valid @RequestBody OrderCommandRequest request) {
-        return blocking.call(() -> ResponseEntity.ok(orderService.complete(id, request.expectedVersion())));
-    }
-
     @GetMapping("/{id}/history")
     @Operation(summary = "Получить хронологическую страницу истории статусов")
     public Mono<ResponseEntity<PageResponse<OrderStatusHistoryResponse>>> history(

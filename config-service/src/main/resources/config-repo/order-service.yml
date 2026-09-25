@@ -28,6 +28,8 @@ springdoc:
     urls:
       - name: Заказы и организации
         url: /v3/api-docs
+      - name: Производство
+        url: /v3/api-docs/production
       - name: Каталог
         url: /v3/api-docs/catalog
 

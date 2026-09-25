@@ -21,13 +21,13 @@ done
 
 registry="$(docker compose -p "$project" exec -T config-service \
     wget -qO- --header='Accept: application/json' http://discovery-service:8761/eureka/apps)"
-for application in ORDER-SERVICE CATALOG-SERVICE GATEWAY-SERVICE; do
+for application in ORDER-SERVICE CATALOG-SERVICE PRODUCTION-SERVICE GATEWAY-SERVICE; do
     jq -e --arg name "$application" \
         '.applications.application[] | select(.name == $name) | .instance[] | select(.status == "UP")' \
         <<< "$registry" >/dev/null
 done
 
-for service in order-service catalog-service gateway-service; do
+for service in order-service catalog-service production-service gateway-service; do
     docker compose -p "$project" exec -T config-service \
         wget -qO- "http://$service:8080/actuator/info" \
         | jq -e '.configuration.source == "config-service" and .configuration.revision == "l2.2"' >/dev/null
@@ -42,7 +42,7 @@ for path in /internal/v1/orders /eureka/apps /actuator/env; do
 done
 
 curl -fsS --max-time 10 "$base_url/swagger-ui/index.html" >/dev/null
-(curl -fsS --max-time 10 "$base_url/v3/api-docs"; curl -fsS --max-time 10 "$base_url/v3/api-docs/catalog") | jq -s -e \
+(curl -fsS --max-time 10 "$base_url/v3/api-docs"; curl -fsS --max-time 10 "$base_url/v3/api-docs/catalog"; curl -fsS --max-time 10 "$base_url/v3/api-docs/production") | jq -s -e \
     'all(.[]; .servers[0].url == "/") and ([.[].paths[] | to_entries[] | select(.key | IN("get","post","put","delete","patch"))] | length) == 32' >/dev/null
 
 python3 "$(dirname "$0")/lab2-api-contract.py" "$base_url"

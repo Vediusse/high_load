@@ -13,6 +13,8 @@ import ru.itmo.highload.catering.order.entity.OrderStatus;
 
 public interface CorporateOrderRepository extends JpaRepository<CorporateOrder, UUID> {
 
+    Page<CorporateOrder> findByStatusIn(java.util.Collection<OrderStatus> statuses, Pageable pageable);
+
     @EntityGraph(attributePaths = "lines")
     Optional<CorporateOrder> findDetailedById(UUID id);
 

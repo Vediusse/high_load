@@ -91,6 +91,14 @@ public class OrderService {
         return new OrderPageResult(body, orders.getTotalElements());
     }
 
+    public PageResponse<OrderResponse> productionQueue(PageRequest request) {
+        Page<CorporateOrder> page = orderRepository.findByStatusIn(
+                Set.of(OrderStatus.CONFIRMED, OrderStatus.IN_COOKING, OrderStatus.READY),
+                request.withSort(Sort.by("id")));
+        return new PageResponse<>(page.getContent().stream().map(this::toResponse).toList(),
+                page.getNumber(), page.getSize(), page.hasNext());
+    }
+
     @Transactional
     public OrderResponse updateDraftDetails(UUID id, UpdateOrderDetailsRequest request) {
         CorporateOrder order = requireOrder(id);

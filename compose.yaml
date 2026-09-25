@@ -88,6 +88,33 @@ services:
         condition: service_healthy
       discovery-service:
         condition: service_healthy
+  production-postgres:
+    image: postgres:17.11-alpine3.24
+    environment:
+      POSTGRES_DB: production
+      POSTGRES_USER: ${PRODUCTION_DB_USER:-production}
+      POSTGRES_PASSWORD: ${PRODUCTION_DB_PASSWORD:-production-dev}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    volumes:
+      - production-postgres-data:/var/lib/postgresql/data
+  production-service:
+    <<: *app
+    build:
+      context: .
+      dockerfile: production-service/Dockerfile
+    environment:
+      <<: *environment
+      PRODUCTION_DB_USER: ${PRODUCTION_DB_USER:-production}
+      PRODUCTION_DB_PASSWORD: ${PRODUCTION_DB_PASSWORD:-production-dev}
+    depends_on:
+      production-postgres:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
   gateway-service:
     <<: *app
     build:
@@ -98,8 +125,11 @@ services:
         condition: service_healthy
       catalog-service:
         condition: service_healthy
+      production-service:
+        condition: service_healthy
     ports:
       - "${HTTP_PORT:-8080}:8080"
 volumes:
   catalog-postgres-data:
   order-postgres-data:
+  production-postgres-data:

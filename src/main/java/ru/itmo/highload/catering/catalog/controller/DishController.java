@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,13 +29,10 @@ import ru.itmo.highload.catering.common.config.StandardApiErrors;
 @RequestMapping("/api/v1/dishes")
 @Tag(name = "Каталог")
 @StandardApiErrors
+@RequiredArgsConstructor
 public class DishController {
 
     private final CatalogService catalogService;
-
-    public DishController(CatalogService catalogService) {
-        this.catalogService = catalogService;
-    }
 
     @PostMapping
     @Operation(summary = "Создать блюдо")
@@ -46,16 +44,16 @@ public class DishController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Получить блюдо")
-    public DishResponse get(@PathVariable UUID id) {
-        return catalogService.getDish(id);
+    public ResponseEntity<DishResponse> get(@PathVariable UUID id) {
+        return ResponseEntity.ok(catalogService.getDish(id));
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Изменить блюдо")
-    public DishResponse update(
+    public ResponseEntity<DishResponse> update(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateDishRequest request) {
-        return catalogService.updateDish(id, request);
+        return ResponseEntity.ok(catalogService.updateDish(id, request));
     }
 
     @DeleteMapping("/{id}")
@@ -68,10 +66,10 @@ public class DishController {
 
     @GetMapping
     @Operation(summary = "Получить активное меню cursor-страницей без total")
-    public DishCursorPageResponse list(
+    public ResponseEntity<DishCursorPageResponse> list(
             @RequestParam(required = false) UUID afterId,
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(required = false) UUID categoryId) {
-        return catalogService.listActiveDishes(afterId, Pagination.requireLimit(limit), categoryId);
+        return ResponseEntity.ok(catalogService.listActiveDishes(afterId, Pagination.requireLimit(limit), categoryId));
     }
 }

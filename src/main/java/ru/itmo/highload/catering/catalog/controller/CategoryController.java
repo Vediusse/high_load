@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,13 +29,10 @@ import ru.itmo.highload.catering.common.web.Pagination;
 @RequestMapping("/api/v1/categories")
 @Tag(name = "Каталог")
 @StandardApiErrors
+@RequiredArgsConstructor
 public class CategoryController {
 
     private final CatalogService catalogService;
-
-    public CategoryController(CatalogService catalogService) {
-        this.catalogService = catalogService;
-    }
 
     @PostMapping
     @Operation(summary = "Создать категорию")
@@ -46,18 +44,18 @@ public class CategoryController {
 
     @GetMapping
     @Operation(summary = "Получить страницу категорий")
-    public PageResponse<CategoryResponse> list(
+    public ResponseEntity<PageResponse<CategoryResponse>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return catalogService.listCategories(Pagination.pageRequest(page, size));
+        return ResponseEntity.ok(catalogService.listCategories(Pagination.pageRequest(page, size)));
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Изменить категорию")
-    public CategoryResponse update(
+    public ResponseEntity<CategoryResponse> update(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateCategoryRequest request) {
-        return catalogService.updateCategory(id, request);
+        return ResponseEntity.ok(catalogService.updateCategory(id, request));
     }
 
     @DeleteMapping("/{id}")

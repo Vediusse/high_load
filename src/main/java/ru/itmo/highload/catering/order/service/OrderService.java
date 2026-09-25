@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -42,6 +43,7 @@ import ru.itmo.highload.catering.organization.service.OrganizationService;
 
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class OrderService {
 
     private final CorporateOrderRepository orderRepository;
@@ -49,19 +51,6 @@ public class OrderService {
     private final OrganizationService organizationService;
     private final CatalogService catalogService;
     private final Clock clock;
-
-    public OrderService(
-            CorporateOrderRepository orderRepository,
-            OrderStatusHistoryRepository historyRepository,
-            OrganizationService organizationService,
-            CatalogService catalogService,
-            Clock clock) {
-        this.orderRepository = orderRepository;
-        this.historyRepository = historyRepository;
-        this.organizationService = organizationService;
-        this.catalogService = catalogService;
-        this.clock = clock;
-    }
 
     @Transactional
     public OrderResponse createDraft(CreateOrderRequest request) {

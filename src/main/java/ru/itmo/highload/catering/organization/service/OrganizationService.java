@@ -1,6 +1,7 @@
 package ru.itmo.highload.catering.organization.service;
 
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
@@ -24,17 +25,11 @@ import ru.itmo.highload.catering.organization.repository.OrganizationRepository;
 
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class OrganizationService {
 
     private final OrganizationRepository organizationRepository;
     private final DeliveryPointRepository deliveryPointRepository;
-
-    public OrganizationService(
-            OrganizationRepository organizationRepository,
-            DeliveryPointRepository deliveryPointRepository) {
-        this.organizationRepository = organizationRepository;
-        this.deliveryPointRepository = deliveryPointRepository;
-    }
 
     @Transactional
     public OrganizationResponse createOrganization(CreateOrganizationRequest request) {

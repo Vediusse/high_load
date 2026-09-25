@@ -19,6 +19,8 @@ import ru.itmo.highload.catering.order.dto.CreateOrderRequest;
 import ru.itmo.highload.catering.order.dto.OrderLineInput;
 import ru.itmo.highload.catering.order.dto.OrderResponse;
 import ru.itmo.highload.catering.order.dto.ReplaceOrderLinesRequest;
+import ru.itmo.highload.catering.order.entity.OrderLine;
+import ru.itmo.highload.catering.order.repository.CorporateOrderRepository;
 import ru.itmo.highload.catering.order.service.OrderService;
 import ru.itmo.highload.catering.organization.entity.DeliveryPoint;
 import ru.itmo.highload.catering.organization.entity.Organization;
@@ -30,6 +32,9 @@ class OrderPersistenceIT extends AbstractPostgresIT {
 
     @Autowired
     OrderService orderService;
+
+    @Autowired
+    CorporateOrderRepository orderRepository;
 
     @Autowired
     OrganizationRepository organizationRepository;
@@ -57,11 +62,15 @@ class OrderPersistenceIT extends AbstractPostgresIT {
                 point.getId(),
                 OffsetDateTime.now(ZoneOffset.UTC).plusDays(2),
                 null));
+        assertThat(orderRepository.findDetailedById(draft.id())).hasValueSatisfying(order ->
+                assertThat(order.getLines()).isEmpty());
         OrderResponse withLines = orderService.replaceDraftLines(
                 draft.id(),
                 new ReplaceOrderLinesRequest(
                         draft.version(),
                         List.of(new OrderLineInput(dish.getId(), 2))));
+        assertThat(orderRepository.findDetailedById(draft.id())).hasValueSatisfying(order ->
+                assertThat(order.getLines()).extracting(OrderLine::getDishId).containsExactly(dish.getId()));
         orderService.submit(draft.id(), withLines.version());
 
         assertThat(jdbcTemplate.queryForObject(

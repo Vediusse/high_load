@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -26,8 +27,8 @@ public interface DishRepository extends JpaRepository<Dish, UUID> {
             @Param("categoryId") UUID categoryId,
             Pageable pageable);
 
-    @Query("select distinct d from Dish d left join fetch d.categories where d.id in :ids")
-    List<Dish> findAllWithCategoriesByIdIn(@Param("ids") Collection<UUID> ids);
+    @EntityGraph(attributePaths = "categories")
+    List<Dish> findAllWithCategoriesByIdIn(Collection<UUID> ids);
 
     boolean existsByCategoriesId(UUID categoryId);
 }

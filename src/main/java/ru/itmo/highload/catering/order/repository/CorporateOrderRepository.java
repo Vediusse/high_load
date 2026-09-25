@@ -14,8 +14,7 @@ import ru.itmo.highload.catering.order.entity.OrderStatus;
 public interface CorporateOrderRepository extends JpaRepository<CorporateOrder, UUID> {
 
     @EntityGraph(attributePaths = "lines")
-    @Query("select o from CorporateOrder o where o.id = :id")
-    Optional<CorporateOrder> findDetailedById(@Param("id") UUID id);
+    Optional<CorporateOrder> findDetailedById(UUID id);
 
     @Query("""
             select o

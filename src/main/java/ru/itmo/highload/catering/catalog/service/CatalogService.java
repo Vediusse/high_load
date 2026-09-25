@@ -8,6 +8,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -30,15 +31,11 @@ import ru.itmo.highload.catering.common.error.ApiException;
 
 @Service
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class CatalogService {
 
     private final DishRepository dishRepository;
     private final CategoryRepository categoryRepository;
-
-    public CatalogService(DishRepository dishRepository, CategoryRepository categoryRepository) {
-        this.dishRepository = dishRepository;
-        this.categoryRepository = categoryRepository;
-    }
 
     @Transactional
     public CategoryResponse createCategory(CreateCategoryRequest request) {

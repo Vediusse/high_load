@@ -90,6 +90,8 @@ class PersistenceConstraintsIT extends AbstractPostgresIT {
         Category lunches = categoryRepository.saveAndFlush(new Category("Обеды"));
         Dish borsch = dishRepository.saveAndFlush(
                 new Dish("Борщ", "", new BigDecimal("180.00"), Set.of(soups, lunches)));
+        Dish uncategorized = dishRepository.saveAndFlush(
+                new Dish("Без категории", "", new BigDecimal("120.00"), Set.of()));
         Dish inactive = dishRepository.saveAndFlush(
                 new Dish("Снятое блюдо", "", new BigDecimal("100.00"), Set.of(soups)));
         inactive.deactivate();
@@ -104,6 +106,13 @@ class PersistenceConstraintsIT extends AbstractPostgresIT {
                     .containsExactlyInAnyOrder("Супы", "Обеды");
             assertThat(dish.isActive()).isTrue();
         });
+        // Collections must be available after the repository call, without an open transaction.
+        assertThat(dishRepository.findAllWithCategoriesByIdIn(List.of(borsch.getId(), uncategorized.getId())))
+                .hasSize(2)
+                .anySatisfy(dish -> {
+                    assertThat(dish.getId()).isEqualTo(uncategorized.getId());
+                    assertThat(dish.getCategories()).isEmpty();
+                });
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM dish_category WHERE dish_id = ?",
                 Long.class,

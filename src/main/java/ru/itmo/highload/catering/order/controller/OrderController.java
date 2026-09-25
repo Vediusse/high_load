@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,13 +37,10 @@ import ru.itmo.highload.catering.order.service.OrderService;
 @RequestMapping("/api/v1/orders")
 @Tag(name = "Заказы")
 @StandardApiErrors
+@RequiredArgsConstructor
 public class OrderController {
 
     private final OrderService orderService;
-
-    public OrderController(OrderService orderService) {
-        this.orderService = orderService;
-    }
 
     @PostMapping
     @Operation(summary = "Создать пустой черновик заказа")
@@ -54,8 +52,8 @@ public class OrderController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Получить заказ с позициями")
-    public OrderResponse get(@PathVariable UUID id) {
-        return orderService.getOrder(id);
+    public ResponseEntity<OrderResponse> get(@PathVariable UUID id) {
+        return ResponseEntity.ok(orderService.getOrder(id));
     }
 
     @GetMapping
@@ -82,18 +80,18 @@ public class OrderController {
 
     @PutMapping("/{id}/details")
     @Operation(summary = "Изменить детали черновика")
-    public OrderResponse updateDetails(
+    public ResponseEntity<OrderResponse> updateDetails(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateOrderDetailsRequest request) {
-        return orderService.updateDraftDetails(id, request);
+        return ResponseEntity.ok(orderService.updateDraftDetails(id, request));
     }
 
     @PutMapping("/{id}/lines")
     @Operation(summary = "Атомарно заменить позиции черновика")
-    public OrderResponse replaceLines(
+    public ResponseEntity<OrderResponse> replaceLines(
             @PathVariable UUID id,
             @Valid @RequestBody ReplaceOrderLinesRequest request) {
-        return orderService.replaceDraftLines(id, request);
+        return ResponseEntity.ok(orderService.replaceDraftLines(id, request));
     }
 
     @DeleteMapping("/{id}")
@@ -106,67 +104,67 @@ public class OrderController {
 
     @PostMapping("/{id}/submit")
     @Operation(summary = "Отправить заказ и зафиксировать снимки цен")
-    public OrderResponse submit(
+    public ResponseEntity<OrderResponse> submit(
             @PathVariable UUID id,
             @Valid @RequestBody OrderCommandRequest request) {
-        return orderService.submit(id, request.expectedVersion());
+        return ResponseEntity.ok(orderService.submit(id, request.expectedVersion()));
     }
 
     @PostMapping("/{id}/confirm")
     @Operation(summary = "Подтвердить заказ целиком")
-    public OrderResponse confirm(
+    public ResponseEntity<OrderResponse> confirm(
             @PathVariable UUID id,
             @Valid @RequestBody OrderCommandRequest request) {
-        return orderService.confirm(id, request.expectedVersion());
+        return ResponseEntity.ok(orderService.confirm(id, request.expectedVersion()));
     }
 
     @PostMapping("/{id}/reject")
     @Operation(summary = "Отклонить заказ целиком с причиной")
-    public OrderResponse reject(
+    public ResponseEntity<OrderResponse> reject(
             @PathVariable UUID id,
             @Valid @RequestBody RejectOrderRequest request) {
-        return orderService.reject(id, request);
+        return ResponseEntity.ok(orderService.reject(id, request));
     }
 
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Отменить заказ до начала приготовления")
-    public OrderResponse cancel(
+    public ResponseEntity<OrderResponse> cancel(
             @PathVariable UUID id,
             @Valid @RequestBody CancelOrderRequest request) {
-        return orderService.cancel(id, request);
+        return ResponseEntity.ok(orderService.cancel(id, request));
     }
 
     @PostMapping("/{id}/start-cooking")
     @Operation(summary = "Начать приготовление подтверждённого заказа")
-    public OrderResponse startCooking(
+    public ResponseEntity<OrderResponse> startCooking(
             @PathVariable UUID id,
             @Valid @RequestBody OrderCommandRequest request) {
-        return orderService.startCooking(id, request.expectedVersion());
+        return ResponseEntity.ok(orderService.startCooking(id, request.expectedVersion()));
     }
 
     @PostMapping("/{id}/mark-ready")
     @Operation(summary = "Отметить заказ готовым")
-    public OrderResponse markReady(
+    public ResponseEntity<OrderResponse> markReady(
             @PathVariable UUID id,
             @Valid @RequestBody OrderCommandRequest request) {
-        return orderService.markReady(id, request.expectedVersion());
+        return ResponseEntity.ok(orderService.markReady(id, request.expectedVersion()));
     }
 
     @PostMapping("/{id}/complete")
     @Operation(summary = "Завершить выданный заказ")
-    public OrderResponse complete(
+    public ResponseEntity<OrderResponse> complete(
             @PathVariable UUID id,
             @Valid @RequestBody OrderCommandRequest request) {
-        return orderService.complete(id, request.expectedVersion());
+        return ResponseEntity.ok(orderService.complete(id, request.expectedVersion()));
     }
 
     @GetMapping("/{id}/history")
     @Operation(summary = "Получить хронологическую страницу истории статусов")
-    public PageResponse<OrderStatusHistoryResponse> history(
+    public ResponseEntity<PageResponse<OrderStatusHistoryResponse>> history(
             @PathVariable UUID id,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return orderService.getHistory(id, Pagination.pageRequest(page, size));
+        return ResponseEntity.ok(orderService.getHistory(id, Pagination.pageRequest(page, size)));
     }
 
     private PageRequestValues validatePage(int page, int size) {

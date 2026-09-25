@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,20 +22,17 @@ import ru.itmo.highload.catering.organization.service.OrganizationService;
 @RequestMapping("/api/v1/delivery-points")
 @Tag(name = "Организации и точки выдачи")
 @StandardApiErrors
+@RequiredArgsConstructor
 public class DeliveryPointController {
 
     private final OrganizationService organizationService;
 
-    public DeliveryPointController(OrganizationService organizationService) {
-        this.organizationService = organizationService;
-    }
-
     @PutMapping("/{id}")
     @Operation(summary = "Изменить точку выдачи")
-    public DeliveryPointResponse update(
+    public ResponseEntity<DeliveryPointResponse> update(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateDeliveryPointRequest request) {
-        return organizationService.updateDeliveryPoint(id, request);
+        return ResponseEntity.ok(organizationService.updateDeliveryPoint(id, request));
     }
 
     @DeleteMapping("/{id}")

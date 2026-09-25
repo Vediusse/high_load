@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,13 +33,10 @@ import ru.itmo.highload.catering.organization.service.OrganizationService;
 @RequestMapping("/api/v1/organizations")
 @Tag(name = "Организации и точки выдачи")
 @StandardApiErrors
+@RequiredArgsConstructor
 public class OrganizationController {
 
     private final OrganizationService organizationService;
-
-    public OrganizationController(OrganizationService organizationService) {
-        this.organizationService = organizationService;
-    }
 
     @PostMapping
     @Operation(summary = "Создать организацию")
@@ -50,16 +48,16 @@ public class OrganizationController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Получить организацию")
-    public OrganizationResponse get(@PathVariable UUID id) {
-        return organizationService.getOrganization(id);
+    public ResponseEntity<OrganizationResponse> get(@PathVariable UUID id) {
+        return ResponseEntity.ok(organizationService.getOrganization(id));
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Изменить организацию")
-    public OrganizationResponse update(
+    public ResponseEntity<OrganizationResponse> update(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateOrganizationRequest request) {
-        return organizationService.updateOrganization(id, request);
+        return ResponseEntity.ok(organizationService.updateOrganization(id, request));
     }
 
     @DeleteMapping("/{id}")
@@ -97,12 +95,12 @@ public class OrganizationController {
 
     @GetMapping("/{organizationId}/delivery-points")
     @Operation(summary = "Получить страницу точек выдачи организации")
-    public PageResponse<DeliveryPointResponse> listDeliveryPoints(
+    public ResponseEntity<PageResponse<DeliveryPointResponse>> listDeliveryPoints(
             @PathVariable UUID organizationId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return organizationService.listDeliveryPoints(
+        return ResponseEntity.ok(organizationService.listDeliveryPoints(
                 organizationId,
-                Pagination.pageRequest(page, size));
+                Pagination.pageRequest(page, size)));
     }
 }

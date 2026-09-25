@@ -1,4 +1,37 @@
+x-app: &app
+  mem_limit: 512m
+  environment: &environment
+    CONFIG_SERVER_URL: http://config-service:8888
+    EUREKA_URL: http://discovery-service:8761/eureka/
+    JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60
+  healthcheck: &health
+    test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
+    interval: 5s
+    timeout: 3s
+    retries: 24
+    start_period: 20s
 services:
+  config-service:
+    mem_limit: 512m
+    build:
+      context: .
+      dockerfile: config-service/Dockerfile
+    environment:
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8888/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
+  discovery-service:
+    <<: *app
+    build:
+      context: .
+      dockerfile: discovery-service/Dockerfile
+    depends_on:
+      config-service:
+        condition: service_healthy
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
   postgres:
     image: postgres:17.11-alpine3.24
     environment:
@@ -10,30 +43,32 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
-      start_period: 5s
     volumes:
       - catering-postgres-data:/var/lib/postgresql/data
-
-  app:
+  monolith:
+    <<: *app
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: monolith/Dockerfile
     environment:
+      <<: *environment
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-catering}
       DB_USER: ${POSTGRES_USER:-catering}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-catering-dev}
-      SERVER_PORT: 8080
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-      start_period: 15s
+      discovery-service:
+        condition: service_healthy
+  gateway-service:
+    <<: *app
+    build:
+      context: .
+      dockerfile: gateway-service/Dockerfile
+    depends_on:
+      monolith:
+        condition: service_healthy
     ports:
-      - "8080:8080"
-
+      - "${HTTP_PORT:-8080}:8080"
 volumes:
   catering-postgres-data:

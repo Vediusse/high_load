@@ -1,0 +1,11 @@
+.git
+.idea
+.env
+.env.*
+.mvn/wrapper/dists
+AI
+target
+Артефакты
+Планировка
+*.iml
+*.log

@@ -97,6 +97,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     ResponseEntity<ApiError> handleUnexpected(Exception exception, HttpServletRequest request) {
+//        if (exception instanceof org.springframework.web.servlet.resource.NoResourceFoundException) return response(HttpStatus.NOT_FOUND, "NOT_FOUND", "Ресурс не найден", List.of(), request);
         String traceId = traceId(request);
         log.error("Unexpected request failure, traceId={}", traceId, exception);
         ApiError error = new ApiError(

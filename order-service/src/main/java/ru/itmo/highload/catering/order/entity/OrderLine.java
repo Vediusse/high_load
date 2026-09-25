@@ -68,6 +68,11 @@ public class OrderLine {
         this.quantity = quantity;
     }
 
+    void updateQuantity(int quantity) {
+        validateQuantity(quantity);
+        this.quantity = quantity;
+    }
+
     void captureSnapshot(String dishName, BigDecimal unitPrice) {
         if (dishName == null || dishName.isBlank() || dishName.trim().length() > 200) {
             throw new IllegalArgumentException("Название блюда для снимка некорректно");

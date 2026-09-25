@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +71,7 @@ public class CorporateOrder {
 
     @Valid
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @org.hibernate.annotations.OptimisticLock(excluded = false)
     @OrderBy("id ASC")
     private List<OrderLine> lines = new ArrayList<>();
 
@@ -111,7 +113,6 @@ public class CorporateOrder {
         }
 
         Set<UUID> uniqueDishIds = new HashSet<>();
-        List<OrderLine> replacements = new ArrayList<>(requestedLines.size());
         BigDecimal preliminaryTotal = new BigDecimal("0.00");
         for (DraftLine requestedLine : requestedLines) {
             if (requestedLine == null) {
@@ -120,12 +121,24 @@ public class CorporateOrder {
             if (!uniqueDishIds.add(requestedLine.dishId())) {
                 throw new DuplicateDishException(requestedLine.dishId());
             }
-            OrderLine line = new OrderLine(this, requestedLine.dishId(), requestedLine.quantity());
-            replacements.add(line);
             preliminaryTotal = preliminaryTotal.add(
                     requestedLine.currentPrice().multiply(BigDecimal.valueOf(requestedLine.quantity())));
         }
 
+        Map<UUID, OrderLine> existing = new HashMap<>();
+        lines.forEach(line -> existing.put(line.getDishId(), line));
+        List<OrderLine> replacements = new ArrayList<>(requestedLines.size());
+        for (DraftLine requestedLine : requestedLines) {
+            OrderLine line = existing.get(requestedLine.dishId());
+            if (line == null) {
+                line = new OrderLine(this, requestedLine.dishId(), requestedLine.quantity());
+            } else {
+                line.updateQuantity(requestedLine.quantity());
+            }
+            replacements.add(line);
+        }
+
+        // Replacing the collection also advances the order version when its total stays unchanged.
         lines.clear();
         lines.addAll(replacements);
         totalAmount = preliminaryTotal;

@@ -239,6 +239,87 @@ class OrderTransactionsIT extends AbstractPostgresIT {
         }
     }
 
+    @Test
+    void retainedLinesCanChangeQuantityAndVersionEvenWhenTotalStaysTheSame() {
+        OrderResponse draft = createDraft(fixture());
+        Dish first = dish("Суп", "100.00");
+        Dish second = dish("Горячее", "200.00");
+        Dish third = dish("Салат", "100.00");
+        OrderResponse initial = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
+                draft.version(), List.of(new OrderLineInput(first.getId(), 1))));
+        UUID lineId = initial.lines().getFirst().id();
+
+        OrderResponse increased = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
+                initial.version(), List.of(new OrderLineInput(first.getId(), 5))));
+        assertThat(increased.totalAmount()).isEqualByComparingTo("500.00");
+        assertThat(increased.version()).isEqualTo(initial.version() + 1);
+        assertThat(increased.lines()).singleElement().satisfies(line -> {
+            assertThat(line.id()).isEqualTo(lineId);
+            assertThat(line.quantity()).isEqualTo(5);
+        });
+
+        OrderResponse sameTotal = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
+                increased.version(), List.of(new OrderLineInput(first.getId(), 3),
+                        new OrderLineInput(second.getId(), 1))));
+        assertThat(sameTotal.totalAmount()).isEqualByComparingTo("500.00");
+        assertThat(sameTotal.version()).isEqualTo(increased.version() + 1);
+
+        OrderResponse swapped = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
+                sameTotal.version(), List.of(new OrderLineInput(first.getId(), 1),
+                        new OrderLineInput(second.getId(), 2))));
+        assertThat(swapped.totalAmount()).isEqualByComparingTo("500.00");
+        assertThat(swapped.version()).isEqualTo(sameTotal.version() + 1);
+        assertThat(swapped.lines().stream().map(line -> line.id()).toList())
+                .containsExactlyInAnyOrderElementsOf(sameTotal.lines().stream().map(line -> line.id()).toList());
+        OrderResponse persisted = orderService.getOrder(draft.id());
+        assertThat(persisted.version()).isEqualTo(swapped.version());
+        assertThat(persisted.lines()).containsExactlyInAnyOrderElementsOf(swapped.lines());
+        assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
+                sameTotal.version(), List.of(new OrderLineInput(first.getId(), 9)))))
+                .isInstanceOfSatisfying(ApiException.class, error ->
+                        assertThat(error.getCode()).isEqualTo("ORDER_VERSION_CONFLICT"));
+
+        OrderResponse replaced = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
+                swapped.version(), List.of(new OrderLineInput(first.getId(), 2),
+                        new OrderLineInput(third.getId(), 3))));
+        assertThat(replaced.totalAmount()).isEqualByComparingTo("500.00");
+        assertThat(replaced.version()).isEqualTo(swapped.version() + 1);
+        assertThat(replaced.lines()).extracting(line -> line.dishId())
+                .containsExactlyInAnyOrder(first.getId(), third.getId());
+        assertThat(replaced.lines().stream().filter(line -> line.dishId().equals(first.getId())).findFirst()
+                .orElseThrow().id()).isEqualTo(lineId);
+
+        OrderResponse cleared = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
+                replaced.version(), List.of()));
+        assertThat(cleared.lines()).isEmpty();
+        assertThat(cleared.totalAmount()).isEqualByComparingTo("0.00");
+        assertThat(cleared.version()).isEqualTo(replaced.version() + 1);
+        orderService.deleteEmptyDraft(draft.id());
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM order_line WHERE order_id = ?",
+                Long.class, draft.id())).isZero();
+    }
+
+    @Test
+    void failedQuantityUpdateRollsBackLinesTotalAndVersion() {
+        OrderResponse draft = createDraft(fixture());
+        Dish first = dish("Суп", "100.00");
+        Dish second = dish("Горячее", "200.00");
+        OrderResponse initial = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
+                draft.version(), List.of(new OrderLineInput(first.getId(), 1))));
+        jdbcTemplate.execute("ALTER TABLE order_line ADD CONSTRAINT ck_test_quantity CHECK (quantity < 5)");
+        try {
+            assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
+                    initial.version(), List.of(new OrderLineInput(first.getId(), 5),
+                            new OrderLineInput(second.getId(), 1)))))
+                    .isInstanceOf(DataAccessException.class);
+        } finally {
+            jdbcTemplate.execute("ALTER TABLE order_line DROP CONSTRAINT ck_test_quantity");
+        }
+        assertThat(orderService.getOrder(draft.id())).isEqualTo(initial);
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM order_line WHERE order_id = ?",
+                Long.class, draft.id())).isEqualTo(1L);
+    }
+
     private Fixture fixture() {
         Organization organization = organizationRepository.saveAndFlush(
                 new Organization("Альфа", "+79991234567"));

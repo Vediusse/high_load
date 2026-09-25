@@ -6,7 +6,7 @@ COPY config-service/pom.xml config-service/pom.xml
 COPY discovery-service/pom.xml discovery-service/pom.xml
 COPY gateway-service/pom.xml gateway-service/pom.xml
 COPY catalog-service/pom.xml catalog-service/pom.xml
-COPY monolith/pom.xml monolith/pom.xml
+COPY order-service/pom.xml order-service/pom.xml
 COPY gateway-service gateway-service
 RUN --mount=type=cache,target=/root/.m2,sharing=locked ./mvnw -B -ntp -pl gateway-service -am -DskipTests package
 FROM eclipse-temurin:21.0.12_8-jre-alpine-3.24

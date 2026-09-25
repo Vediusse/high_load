@@ -26,6 +26,12 @@ for path, operations in baseline["paths"].items():
     assert paths[path].keys() == operations.keys(), path
     for method, operation in operations.items():
         # operationId is unique within one document; it changes when controllers split.
-        for field in ("requestBody", "responses", "parameters"):
+        for field in ("requestBody", "parameters"):
             assert paths[path][method].get(field) == operation.get(field), (path, method, field)
+        responses = paths[path][method]["responses"]
+        for code, response in operation["responses"].items():
+            assert responses.get(code) == response, (path, method, code)
+        assert responses.keys() - operation["responses"].keys() <= {"503"}, (path, method, "new response")
+        if "503" in responses:
+            assert responses["503"]["content"]["application/json"]["schema"]["$ref"] == "#/components/schemas/ApiError"
 print("PASS: публичные операции, параметры, DTO и ответы совпадают с первой лабой")

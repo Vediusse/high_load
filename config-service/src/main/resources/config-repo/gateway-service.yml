@@ -17,7 +17,7 @@ spring:
                 - Path=/v3/api-docs/catalog
               filters:
                 - SetPath=/v3/api-docs
-            - id: monolith-api
-              uri: lb://monolith
+            - id: order-service-api
+              uri: lb://order-service
               predicates:
                 - Path=/api/v1/**,/v3/api-docs/**,/swagger-ui/**,/swagger-ui.html

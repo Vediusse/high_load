@@ -21,13 +21,13 @@ done
 
 registry="$(docker compose -p "$project" exec -T config-service \
     wget -qO- --header='Accept: application/json' http://discovery-service:8761/eureka/apps)"
-for application in MONOLITH CATALOG-SERVICE GATEWAY-SERVICE; do
+for application in ORDER-SERVICE CATALOG-SERVICE GATEWAY-SERVICE; do
     jq -e --arg name "$application" \
         '.applications.application[] | select(.name == $name) | .instance[] | select(.status == "UP")' \
         <<< "$registry" >/dev/null
 done
 
-for service in monolith catalog-service gateway-service; do
+for service in order-service catalog-service gateway-service; do
     docker compose -p "$project" exec -T config-service \
         wget -qO- "http://$service:8080/actuator/info" \
         | jq -e '.configuration.source == "config-service" and .configuration.revision == "l2.2"' >/dev/null

@@ -12,10 +12,10 @@ class ConfigServerIT {
     @Autowired TestRestTemplate http;
 
     @Test void servesSharedAndApplicationConfiguration() {
-        var result = http.getForEntity("/monolith/default", String.class);
+        var result = http.getForEntity("/order-service/default", String.class);
         assertThat(result.getStatusCode().value()).isEqualTo(200);
         assertThat(result.getBody()).contains("spring.datasource.url", "info.configuration.source", "config-service");
         assertThat(http.getForObject("/gateway-service/default", String.class))
-                .contains("lb://monolith", "spring.cloud.gateway.server.webflux.routes");
+                .contains("lb://order-service", "spring.cloud.gateway.server.webflux.routes");
     }
 }

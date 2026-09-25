@@ -1,5 +1,6 @@
 x-app: &app
   mem_limit: 512m
+  stop_grace_period: 45s
   environment: &environment
     CONFIG_SERVER_URL: http://config-service:8888
     EUREKA_URL: http://discovery-service:8761/eureka/
@@ -32,19 +33,19 @@ services:
     healthcheck:
       <<: *health
       test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
-  postgres:
+  order-postgres:
     image: postgres:17.11-alpine3.24
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-catering}
-      POSTGRES_USER: ${POSTGRES_USER:-catering}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-catering-dev}
+      POSTGRES_DB: ${ORDER_DB_NAME:-orders}
+      POSTGRES_USER: ${ORDER_DB_USER:-orders}
+      POSTGRES_PASSWORD: ${ORDER_DB_PASSWORD:-orders-dev}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 12
     volumes:
-      - catering-postgres-data:/var/lib/postgresql/data
+      - order-postgres-data:/var/lib/postgresql/data
   catalog-postgres:
     image: postgres:17.11-alpine3.24
     environment:
@@ -72,18 +73,18 @@ services:
         condition: service_healthy
       discovery-service:
         condition: service_healthy
-  monolith:
+  order-service:
     <<: *app
     build:
       context: .
-      dockerfile: monolith/Dockerfile
+      dockerfile: order-service/Dockerfile
     environment:
       <<: *environment
-      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-catering}
-      DB_USER: ${POSTGRES_USER:-catering}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-catering-dev}
+      DB_URL: jdbc:postgresql://order-postgres:5432/${ORDER_DB_NAME:-orders}
+      DB_USER: ${ORDER_DB_USER:-orders}
+      DB_PASSWORD: ${ORDER_DB_PASSWORD:-orders-dev}
     depends_on:
-      postgres:
+      order-postgres:
         condition: service_healthy
       discovery-service:
         condition: service_healthy
@@ -93,7 +94,7 @@ services:
       context: .
       dockerfile: gateway-service/Dockerfile
     depends_on:
-      monolith:
+      order-service:
         condition: service_healthy
       catalog-service:
         condition: service_healthy
@@ -101,4 +102,4 @@ services:
       - "${HTTP_PORT:-8080}:8080"
 volumes:
   catalog-postgres-data:
-  catering-postgres-data:
+  order-postgres-data:

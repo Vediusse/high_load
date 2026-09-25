@@ -1,0 +1,57 @@
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://order-postgres:5432/orders}
+    username: ${DB_USER:orders}
+    password: ${DB_PASSWORD:orders-dev}
+    hikari:
+      connection-timeout: 5000
+      validation-timeout: 3000
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-migration-naming: true
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    urls:
+      - name: Заказы и организации
+        url: /v3/api-docs
+      - name: Каталог
+        url: /v3/api-docs/catalog
+
+---
+spring:
+  cloud:
+    openfeign:
+      client:
+        config:
+          catalog-service:
+            connectTimeout: 1000
+            readTimeout: 2000
+    circuitbreaker:
+      resilience4j:
+        disable-time-limiter: true
+        disable-thread-pool: true
+resilience4j:
+  circuitbreaker:
+    instances:
+      catalog:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 5s
+        permittedNumberOfCallsInHalfOpenState: 2
+        ignoreExceptions:
+          - ru.itmo.highload.catering.common.error.ApiException

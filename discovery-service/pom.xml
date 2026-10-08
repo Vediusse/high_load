@@ -27,6 +27,14 @@
         </dependency>
     </dependencies>
     <build>
+        <testResources>
+            <testResource><directory>src/test/resources</directory></testResource>
+            <testResource>
+                <directory>../config-service/src/main/resources/config-repo</directory>
+                <targetPath>discovery-config</targetPath>
+                <includes><include>application.yml</include><include>discovery-service.yml</include></includes>
+            </testResource>
+        </testResources>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

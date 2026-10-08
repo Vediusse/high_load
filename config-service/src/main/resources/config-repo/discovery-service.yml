@@ -1,8 +1,14 @@
 server:
   port: 8761
 eureka:
+  instance:
+    hostname: ${EUREKA_SERVER_HOSTNAME:discovery-service}
+    prefer-ip-address: false
   client:
     register-with-eureka: false
     fetch-registry: false
+    service-url:
+      # A standalone server must recognize this URL as its own, not as a replication peer.
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
   server:
     response-cache-update-interval-ms: 1000

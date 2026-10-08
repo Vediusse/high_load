@@ -119,6 +119,45 @@ class CatalogApiIT {
         client.get().uri("/api/v1/dishes").header("X-Trace-Id", "unsafe trace").exchange()
                 .expectStatus().isOk().expectHeader().value("X-Trace-Id", value -> assertThat(UUID.fromString(value)).isNotNull());
     }
+    @Test void categoryCursorFiltersBeforeLimitingAndReturnsAllDishCategories() {
+        UUID selected = category("Обеды"), other = category("Основные блюда"), empty = category("Десерты");
+        List<String> expected = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            expected.add(dish("Обед " + i, "250.00", Set.of(selected, other)).toString());
+            dish("Другое блюдо " + i, "100.00", Set.of(other));
+        }
+        UUID inactive = dish("Снятое блюдо", "100.00", Set.of(selected));
+        client.delete().uri("/api/v1/dishes/" + inactive).exchange().expectStatus().isNoContent();
+        expected.sort(Comparator.naturalOrder());
+        String cursor = "";
+        for (int offset = 0; offset < expected.size(); offset += 2) {
+            JsonNode page = client.get().uri("/api/v1/dishes?limit=2&categoryId=" + selected + cursor)
+                    .exchange().expectStatus().isOk().expectBody(JsonNode.class).returnResult().getResponseBody();
+            List<String> actual = new ArrayList<>();
+            for (JsonNode item : page.get("items")) {
+                actual.add(item.get("id").asText());
+                assertThat(item.get("categoryIds")).hasSize(2);
+                assertThat(item.get("categoryIds").toString()).contains(selected.toString(), other.toString());
+            }
+            assertThat(actual).containsExactlyElementsOf(expected.subList(offset, Math.min(offset + 2, expected.size())));
+            boolean hasNext = offset + 2 < expected.size();
+            assertThat(page.get("hasNext").asBoolean()).isEqualTo(hasNext);
+            if (hasNext) {
+                assertThat(page.get("nextCursor").asText()).isEqualTo(actual.getLast());
+                cursor = "&afterId=" + page.get("nextCursor").asText();
+            } else {
+                assertThat(page.get("nextCursor").isNull()).isTrue();
+            }
+        }
+        client.get().uri("/api/v1/dishes?limit=2&categoryId=" + empty).exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.items").isEmpty().jsonPath("$.hasNext").isEqualTo(false);
+        UUID edited = UUID.fromString(expected.getFirst());
+        client.put().uri("/api/v1/dishes/" + edited).bodyValue(payload("Без категорий", "250.00", Set.of()))
+                .exchange().expectStatus().isOk().expectBody().jsonPath("$.categoryIds").isEmpty();
+        client.get().uri("/api/v1/dishes?categoryId=" + selected).exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.items.length()").isEqualTo(4)
+                .jsonPath("$.items[*].id").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(edited.toString())));
+    }
     @Test void batchSnapshotsAreCompleteAndRejectMissingOrInactiveDishes() {
         UUID first = dish("Борщ", "180.00", Set.of()), second = dish("Суп", "100.00", Set.of());
         client.post().uri("/internal/v1/dishes/snapshots").bodyValue(Map.of("ids", List.of(first, second)))

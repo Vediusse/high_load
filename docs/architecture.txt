@@ -78,6 +78,13 @@ clients.order.url. В коде нет IP-адресов развёртывани
 
 Catalog использует WebFlux, Reactor и Spring Data R2DBC. Flyway использует JDBC
 только при старте. SQL-операции внутри HTTP-цепочки неблокирующие.
+CatalogService отвечает за бизнес-проверки, DTO и границы реактивной транзакции.
+Доступ к данным находится в CategoryRepository, DishRepository и
+DishCategoryRepository. Простые операции выполняет R2dbcEntityTemplate; JOIN
+для фильтра меню по категории строит SQL DSL Spring Data Relational. Ручных
+SQL-строк в Java-коде Catalog нет. Фильтр, сортировка по UUID и limit + 1
+выполняются в PostgreSQL до сборки страницы; категории страницы читаются одним
+пакетным запросом. Изменение блюда и его связей остаётся в одной транзакции.
 Order использует WebFlux и JPA. Kitchen использует WebFlux, JPA и Feign.
 JPA и блокирующий Feign выполняются через ограниченный boundedElastic scheduler;
 транзакция открывается и закрывается в одном синхронном сервисном вызове.

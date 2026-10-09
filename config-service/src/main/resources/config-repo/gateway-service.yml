@@ -1,0 +1,33 @@
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 1000
+            response-timeout: 10s
+          routes:
+            - id: kitchen-commands
+              uri: lb://kitchen-service
+              predicates:
+                - Path=/api/v1/orders/{id}/start-cooking,/api/v1/orders/{id}/mark-ready,/api/v1/orders/{id}/complete
+            - id: kitchen-docs
+              uri: lb://kitchen-service
+              predicates:
+                - Path=/v3/api-docs/kitchen
+              filters:
+                - SetPath=/v3/api-docs
+            - id: catalog-api
+              uri: lb://catalog-service
+              predicates:
+                - Path=/api/v1/categories/**,/api/v1/dishes/**
+            - id: catalog-docs
+              uri: lb://catalog-service
+              predicates:
+                - Path=/v3/api-docs/catalog
+              filters:
+                - SetPath=/v3/api-docs
+            - id: order-service-api
+              uri: lb://order-service
+              predicates:
+                - Path=/api/v1/**,/v3/api-docs/**,/swagger-ui/**,/swagger-ui.html

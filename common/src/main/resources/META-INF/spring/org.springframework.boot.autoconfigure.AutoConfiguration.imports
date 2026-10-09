@@ -1,0 +1,5 @@
+ru.itmo.highload.common.config.CommonWebAutoConfiguration
+ru.itmo.highload.common.config.CommonPersistenceAutoConfiguration
+ru.itmo.highload.common.config.CommonOpenApiAutoConfiguration
+ru.itmo.highload.common.config.CommonFeignAutoConfiguration
+ru.itmo.highload.common.config.CommonBlockingAutoConfiguration

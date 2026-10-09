@@ -1,0 +1,2660 @@
+{
+  "info": {
+    "name": "Корпоративное питание — быстрая проверка API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Импортируйте этот JSON, укажите baseUrl в Variables коллекции (локальная лабораторная 2: http://localhost:18080), затем Run collection: все папки по порядку, 1 iteration, delay 0. Environment и дополнительные файлы не нужны. ID, будущая дата и версии подставляются автоматически; каждый запуск создаёт свои данные. Можно нажимать Send строго сверху вниз.\n\n65 запросов: все 32 публичные операции, справочники, оформление/расчёт/снимки заказа, кухня до выдачи, отклонение, отмена из трёх статусов, редактирование и удаление черновика, основные ошибки, повтор команды кухни без нового перехода. Каждый запрос отправляется один раз, скрытых HTTP-запросов и ожиданий нет. В конце отключаются только созданные этим прогоном справочники; заказы и история сохраняются. Используйте учебную/тестовую базу.\n\nКоллекция проверяет лабораторную 2 через Gateway. Старый монолит лабораторной 1 не поддерживает повтор команды кухни после завершения заказа: запрос 36 на нём вернёт 409. Для стандартного запуска Compose на 8080 измените baseUrl; если 8080 занят первой лабораторной, запустите вторую с HTTP_PORT=18080.\n\nЭто быстрый функциональный прогон через Gateway. Остановка сервисов, таймауты, конкурентные запросы, миграции и инфраструктура требуют отдельных интеграционных проверок."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:18080",
+      "type": "string"
+    },
+    {
+      "key": "category",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "dishA",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "dishB",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "foreignPoint",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "future",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "lines",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "order",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "org",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otherOrg",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "past",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "point",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "runId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "startResponse",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "startVersion",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "total",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "unusedCategory",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "version",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Справочники",
+      "item": [
+        {
+          "name": "01. Создать организацию",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/organizations",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Создать организацию. Ожидается HTTP 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Компания {{runId}}\",\n  \"phone\": \"+79991234567\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Создать организацию\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.active).to.equal(true);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"org\", b.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Изменить организацию",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/organizations/{{org}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Изменить организацию. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Компания обновлена {{runId}}\",\n  \"phone\": \"+79991234568\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Изменить организацию\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "pm.expect(b.name).to.equal(pm.variables.replaceIn('Компания обновлена {{runId}}')); pm.expect(b.phone).to.equal('+79991234568'); pm.expect(b.version).to.equal(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. Изменения организации сохранены",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/organizations/{{org}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Изменения организации сохранены. Ожидается HTTP 200."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Изменения организации сохранены\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "pm.expect(b.phone).to.equal('+79991234568'); pm.expect(b.version).to.equal(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. Страница 0 организаций",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/organizations?page=0&size=1",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Страница 0 организаций. Ожидается HTTP 200."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Страница 0 организаций\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "pm.expect(b.page).to.equal(0);pm.expect(b.size).to.equal(1);pm.expect(b.items).to.have.lengthOf(1);pm.expect(Number(pm.response.headers.get('X-Total-Count'))).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05. Добавить точку выдачи",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/organizations/{{org}}/delivery-points",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Добавить точку выдачи. Ожидается HTTP 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Главный офис\",\n  \"address\": \"Кронверкский проспект, 49\",\n  \"contactName\": \"Анна\",\n  \"contactPhone\": \"+79997654321\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Добавить точку выдачи\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.organizationId).to.equal(pm.collectionVariables.get(\"org\"));",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"point\", b.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06. Изменить точку выдачи",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/delivery-points/{{point}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Изменить точку выдачи. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Офис обновлён\",\n  \"address\": \"Новый адрес\",\n  \"contactName\": \"Иван\",\n  \"contactPhone\": \"+79997654322\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Изменить точку выдачи\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "pm.expect(b.organizationId).to.equal(pm.collectionVariables.get(\"org\")); pm.expect(b.address).to.equal('Новый адрес');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07. Список точек своей организации",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/organizations/{{org}}/delivery-points?page=0&size=1",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Список точек своей организации. Ожидается HTTP 200."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Список точек своей организации\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "pm.expect(b.items).to.have.lengthOf(1);pm.expect(b.items[0].id).to.equal(pm.collectionVariables.get(\"point\"));pm.expect(b.items[0].address).to.equal('Новый адрес');pm.expect(b.hasNext).to.equal(false);pm.expect(b.page).to.equal(0);pm.expect(b.size).to.equal(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08. Создать другую организацию",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/organizations",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Создать другую организацию. Ожидается HTTP 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Другая компания {{runId}}\",\n  \"phone\": \"+79990000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Создать другую организацию\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"otherOrg\", b.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09. Создать чужую точку выдачи",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/organizations/{{otherOrg}}/delivery-points",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Создать чужую точку выдачи. Ожидается HTTP 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Главный офис\",\n  \"address\": \"Кронверкский проспект, 49\",\n  \"contactName\": \"Анна\",\n  \"contactPhone\": \"+79997654321\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Создать чужую точку выдачи\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"foreignPoint\", b.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10. Создать категорию меню",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/categories",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Создать категорию меню. Ожидается HTTP 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Обеды {{runId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Создать категорию меню\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"category\", b.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11. Добавить суп по цене 180",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/dishes",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Добавить суп по цене 180. Ожидается HTTP 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Суп {{runId}}\",\n  \"description\": \"Блюдо собственной кухни\",\n  \"currentPrice\": 180,\n  \"categoryIds\": [\n    \"{{category}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Добавить суп по цене 180\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.active).to.equal(true);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"dishA\", b.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12. Добавить горячее по цене 320",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/dishes",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Добавить горячее по цене 320. Ожидается HTTP 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Горячее {{runId}}\",\n  \"description\": \"Блюдо собственной кухни\",\n  \"currentPrice\": 320,\n  \"categoryIds\": [\n    \"{{category}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Добавить горячее по цене 320\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.active).to.equal(true);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"dishB\", b.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13. Прочитать блюдо",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/dishes/{{dishA}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Прочитать блюдо. Ожидается HTTP 200."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Прочитать блюдо\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "pm.expect(b.id).to.equal(pm.collectionVariables.get(\"dishA\"));pm.expect(b.currentPrice).to.equal(180);pm.expect(b.categoryIds).to.deep.equal([pm.collectionVariables.get(\"category\")]);pm.expect(b.active).to.equal(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14. Добавить свободную категорию",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/categories",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Добавить свободную категорию. Ожидается HTTP 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Свободная {{runId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Добавить свободную категорию\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "",
+                  "});",
+                  "if (pm.response.code === 201) { const b = pm.response.json();",
+                  "pm.collectionVariables.set(\"unusedCategory\", b.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15. Переименовать свободную категорию",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/categories/{{unusedCategory}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Переименовать свободную категорию. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Обновлённая {{runId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Переименовать свободную категорию\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "pm.expect(b.name).to.equal(pm.variables.replaceIn('Обновлённая {{runId}}'));pm.expect(b.id).to.equal(pm.collectionVariables.get(\"unusedCategory\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "16. Страница 0 категорий",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/categories?page=0&size=1",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Страница 0 категорий. Ожидается HTTP 200."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Страница 0 категорий\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "pm.expect(b.page).to.equal(0);pm.expect(b.size).to.equal(1);pm.expect(b.items).to.have.lengthOf(1);pm.expect(b.hasNext).to.equal(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "17. Удалить свободную категорию",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/categories/{{unusedCategory}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Удалить свободную категорию. Ожидается HTTP 204."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Удалить свободную категорию\", () => {",
+                  "  pm.response.to.have.status(204);",
+                  "",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02. Заказ: оформление → кухня → выдача",
+      "item": [
+        {
+          "name": "18. Создать черновик",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Создать черновик. Ожидается HTTP 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": \"{{org}}\",\n  \"deliveryPointId\": \"{{point}}\",\n  \"requestedDeliveryAt\": \"{{future}}\",\n  \"comment\": \"Бизнес-сценарий\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Создать черновик\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"DRAFT\"); pm.expect(b.lines).to.have.lengthOf(0); pm.expect(b.totalAmount).to.equal(0);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "19. Пустой заказ нельзя отправить",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/submit",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Пустой заказ нельзя отправить. Ожидается HTTP 422, code=ORDER_EMPTY.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Пустой заказ нельзя отправить\", () => {",
+                  "  pm.response.to.have.status(422);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.code).to.equal(\"ORDER_EMPTY\");",
+                  "",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "20. Добавить блюда в черновик",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/lines",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Добавить блюда в черновик. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}},\n  \"lines\": [\n    {\n      \"dishId\": \"{{dishA}}\",\n      \"quantity\": 2\n    },\n    {\n      \"dishId\": \"{{dishB}}\",\n      \"quantity\": 3\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Добавить блюда в черновик\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"DRAFT\"); pm.expect(b.totalAmount).to.equal(1320);",
+                  "  pm.expect(b.lines.map(x=>({dishId:x.dishId,quantity:x.quantity}))).to.have.deep.members(JSON.parse(pm.variables.replaceIn(\"[{\\\"dishId\\\": \\\"{{dishA}}\\\", \\\"quantity\\\": 2}, {\\\"dishId\\\": \\\"{{dishB}}\\\", \\\"quantity\\\": 3}]\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "21. Количество должно быть положительным",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/lines",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Количество должно быть положительным. Ожидается HTTP 400, code=VALIDATION_FAILED.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}},\n  \"lines\": [\n    {\n      \"dishId\": \"{{dishB}}\",\n      \"quantity\": 0\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Количество должно быть положительным\", () => {",
+                  "  pm.response.to.have.status(400);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.code).to.equal(\"VALIDATION_FAILED\");",
+                  "  pm.expect(b.fieldErrors.some(e => e.field === \"lines[0].quantity\")).to.equal(true);",
+                  "",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "22. Нельзя выбрать чужую точку выдачи",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/details",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Нельзя выбрать чужую точку выдачи. Ожидается HTTP 422, code=DELIVERY_POINT_ORGANIZATION_MISMATCH.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deliveryPointId\": \"{{foreignPoint}}\",\n  \"requestedDeliveryAt\": \"{{future}}\",\n  \"comment\": \"Уточнённый заказ\",\n  \"expectedVersion\": {{version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Нельзя выбрать чужую точку выдачи\", () => {",
+                  "  pm.response.to.have.status(422);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.code).to.equal(\"DELIVERY_POINT_ORGANIZATION_MISMATCH\");",
+                  "",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "23. Нельзя перезаписать устаревшую версию",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/details",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Нельзя перезаписать устаревшую версию. Ожидается HTTP 409, code=ORDER_VERSION_CONFLICT.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deliveryPointId\": \"{{point}}\",\n  \"requestedDeliveryAt\": \"{{future}}\",\n  \"comment\": \"Уточнённый заказ\",\n  \"expectedVersion\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Нельзя перезаписать устаревшую версию\", () => {",
+                  "  pm.response.to.have.status(409);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.code).to.equal(\"ORDER_VERSION_CONFLICT\");",
+                  "",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "24. Исправить дату получения",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/details",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Исправить дату получения. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"deliveryPointId\": \"{{point}}\",\n  \"requestedDeliveryAt\": \"{{future}}\",\n  \"comment\": \"Уточнённый заказ\",\n  \"expectedVersion\": {{version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Исправить дату получения\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"DRAFT\"); pm.expect(Date.parse(b.requestedDeliveryAt)).to.equal(Date.parse(pm.collectionVariables.get(\"future\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "25. До отправки повысить цену супа до 200",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/dishes/{{dishA}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "До отправки повысить цену супа до 200. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Суп {{runId}}\",\n  \"description\": \"Блюдо собственной кухни\",\n  \"currentPrice\": 200,\n  \"categoryIds\": [\n    \"{{category}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"До отправки повысить цену супа до 200\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.currentPrice).to.equal(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "26. Отправить заказ на кухню",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/submit",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Отправить заказ на кухню. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Отправить заказ на кухню\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"SUBMITTED\"); pm.expect(b.version).to.equal(Number(pm.collectionVariables.get(\"version\"))+1);",
+                  "  b.lines.forEach(x=>{pm.expect(x.dishNameSnapshot).to.be.a(\"string\").and.not.empty; pm.expect(x.unitPriceSnapshot).to.be.above(0); pm.expect(x.lineAmount).to.equal(x.quantity*x.unitPriceSnapshot);}); pm.expect(b.totalAmount).to.equal(b.lines.reduce((s,x)=>s+x.lineAmount,0));",
+                  "  pm.expect(b.totalAmount).to.equal(1360);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "27. После отправки изменить имя и цену на 250",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/dishes/{{dishA}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "После отправки изменить имя и цену на 250. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Новое имя супа {{runId}}\",\n  \"description\": \"Блюдо собственной кухни\",\n  \"currentPrice\": 250,\n  \"categoryIds\": [\n    \"{{category}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"После отправки изменить имя и цену на 250\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.currentPrice).to.equal(250);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "28. Отключить суп в меню",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/dishes/{{dishA}}",
+            "header": [],
+            "description": "Отключить суп в меню. Ожидается HTTP 204."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Отключить суп в меню\", () => {",
+                  "  pm.response.to.have.status(204);",
+                  "",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "29. Снимки заказа пережили изменение и отключение блюда",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}",
+            "header": [],
+            "description": "Ожидается HTTP 200."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Снимки заказа пережили изменение и отключение блюда\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "pm.expect(b.status).to.equal('SUBMITTED');\npm.expect(b.version).to.equal(Number(pm.collectionVariables.get('version')));\npm.expect(b.totalAmount).to.equal(1360);\npm.expect(b.lines).to.have.deep.members(JSON.parse(pm.collectionVariables.get('lines')));\nconst soup = b.lines.find(x => x.dishId === pm.collectionVariables.get('dishA'));\npm.expect(soup.dishNameSnapshot).to.equal('Суп '+pm.collectionVariables.get('runId'));\npm.expect(soup.unitPriceSnapshot).to.equal(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "30. В меню осталось только активное горячее",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/dishes?categoryId={{category}}&limit=50",
+            "header": [],
+            "description": "В меню осталось только активное горячее. Ожидается HTTP 200."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"В меню осталось только активное горячее\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.items.map(x=>x.id)).to.deep.equal([pm.collectionVariables.get(\"dishB\")]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "31. Кухня принимает весь заказ",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/confirm",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Кухня принимает весь заказ. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Кухня принимает весь заказ\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"CONFIRMED\"); pm.expect(b.version).to.equal(Number(pm.collectionVariables.get(\"version\"))+1);",
+                  "  pm.expect(b.totalAmount).to.equal(Number(pm.collectionVariables.get(\"total\"))); pm.expect(b.lines).to.have.deep.members(JSON.parse(pm.collectionVariables.get(\"lines\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "32. Начать приготовление",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/start-cooking",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Начать приготовление. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('startVersion',pm.collectionVariables.get('version'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Начать приготовление\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"IN_COOKING\"); pm.expect(b.version).to.equal(Number(pm.collectionVariables.get(\"version\"))+1);",
+                  "  pm.expect(b.totalAmount).to.equal(Number(pm.collectionVariables.get(\"total\"))); pm.expect(b.lines).to.have.deep.members(JSON.parse(pm.collectionVariables.get(\"lines\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}",
+                  "if (pm.response.code === 200) pm.collectionVariables.set('startResponse',pm.response.text());"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "33. После начала приготовления отмена запрещена",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/cancel",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "После начала приготовления отмена запрещена. Ожидается HTTP 409, code=ORDER_STATUS_CONFLICT.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}},\n  \"reason\": \"Передумали\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"После начала приготовления отмена запрещена\", () => {",
+                  "  pm.response.to.have.status(409);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.code).to.equal(\"ORDER_STATUS_CONFLICT\");",
+                  "",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "34. Отметить готовность",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/mark-ready",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Отметить готовность. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Отметить готовность\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"READY\"); pm.expect(b.version).to.equal(Number(pm.collectionVariables.get(\"version\"))+1);",
+                  "  pm.expect(b.totalAmount).to.equal(Number(pm.collectionVariables.get(\"total\"))); pm.expect(b.lines).to.have.deep.members(JSON.parse(pm.collectionVariables.get(\"lines\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "35. Выдать заказ организации",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/complete",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Выдать заказ организации. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Выдать заказ организации\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"COMPLETED\"); pm.expect(b.version).to.equal(Number(pm.collectionVariables.get(\"version\"))+1);",
+                  "  pm.expect(b.totalAmount).to.equal(Number(pm.collectionVariables.get(\"total\"))); pm.expect(b.lines).to.have.deep.members(JSON.parse(pm.collectionVariables.get(\"lines\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "36. Повтор start-cooking после выдачи возвращает прежний результат",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/start-cooking",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Лабораторная 2: точный повтор команды возвращает сохранённый ответ 200 и не меняет завершённый заказ. На монолите лабораторной 1 будет 409; проверьте, что baseUrl указывает на Gateway второй лабораторной.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{startVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Повтор start-cooking после выдачи возвращает прежний результат\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "pm.expect(b).to.deep.equal(JSON.parse(pm.collectionVariables.get('startResponse')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "37. Проверить историю переходов",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/history?size=50",
+            "header": [],
+            "description": "Проверить историю переходов. Ожидается HTTP 200."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Проверить историю переходов\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.items.map(x=>x.toStatus)).to.deep.equal([\"SUBMITTED\", \"CONFIRMED\", \"IN_COOKING\", \"READY\", \"COMPLETED\"]); pm.expect(b.items.map(x=>x.fromStatus)).to.deep.equal([\"DRAFT\", \"SUBMITTED\", \"CONFIRMED\", \"IN_COOKING\", \"READY\"]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "38. Фильтр заказов по организации и статусу",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/orders?organizationId={{org}}&status=COMPLETED&page=0&size=1",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Фильтр заказов по организации и статусу. Ожидается HTTP 200."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Фильтр заказов по организации и статусу\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "pm.expect(b.items).to.have.lengthOf(1);pm.expect(b.items[0].id).to.equal(pm.collectionVariables.get(\"order\"));pm.expect(b.items[0].organizationId).to.equal(pm.collectionVariables.get(\"org\"));pm.expect(b.items[0].status).to.equal('COMPLETED');pm.expect(b.hasNext).to.equal(false);pm.expect(pm.response.headers.get('X-Total-Count')).to.equal('1');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03. Отклонение и отмены",
+      "item": [
+        {
+          "name": "39. Создать черновик",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Создать черновик. Ожидается HTTP 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": \"{{org}}\",\n  \"deliveryPointId\": \"{{point}}\",\n  \"requestedDeliveryAt\": \"{{future}}\",\n  \"comment\": \"Бизнес-сценарий\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Создать черновик\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"DRAFT\"); pm.expect(b.lines).to.have.lengthOf(0); pm.expect(b.totalAmount).to.equal(0);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "40. Добавить блюда в черновик",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/lines",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Добавить блюда в черновик. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}},\n  \"lines\": [\n    {\n      \"dishId\": \"{{dishB}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Добавить блюда в черновик\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"DRAFT\"); pm.expect(b.totalAmount).to.equal(320);",
+                  "  pm.expect(b.lines.map(x=>({dishId:x.dishId,quantity:x.quantity}))).to.have.deep.members(JSON.parse(pm.variables.replaceIn(\"[{\\\"dishId\\\": \\\"{{dishB}}\\\", \\\"quantity\\\": 1}]\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "41. Отправить заказ на рассмотрение",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/submit",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Отправить заказ на рассмотрение. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Отправить заказ на рассмотрение\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"SUBMITTED\"); pm.expect(b.version).to.equal(Number(pm.collectionVariables.get(\"version\"))+1);",
+                  "  b.lines.forEach(x=>{pm.expect(x.dishNameSnapshot).to.be.a(\"string\").and.not.empty; pm.expect(x.unitPriceSnapshot).to.be.above(0); pm.expect(x.lineAmount).to.equal(x.quantity*x.unitPriceSnapshot);}); pm.expect(b.totalAmount).to.equal(b.lines.reduce((s,x)=>s+x.lineAmount,0));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "42. Отклонить весь заказ",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/reject",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Отклонить весь заказ. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}},\n  \"reason\": \"Кухня не может приготовить заказ к этому времени\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Отклонить весь заказ\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"REJECTED\"); pm.expect(b.version).to.equal(Number(pm.collectionVariables.get(\"version\"))+1);",
+                  "  pm.expect(b.totalAmount).to.equal(Number(pm.collectionVariables.get(\"total\"))); pm.expect(b.lines).to.have.deep.members(JSON.parse(pm.collectionVariables.get(\"lines\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "43. Проверить историю переходов",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/history?size=50",
+            "header": [],
+            "description": "Проверить историю переходов. Ожидается HTTP 200."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Проверить историю переходов\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.items.map(x=>x.toStatus)).to.deep.equal([\"SUBMITTED\", \"REJECTED\"]); pm.expect(b.items.map(x=>x.fromStatus)).to.deep.equal([\"DRAFT\", \"SUBMITTED\"]); pm.expect(b.items[b.items.length-1].reason).to.equal(\"Кухня не может приготовить заказ к этому времени\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "44. Создать черновик",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Создать черновик. Ожидается HTTP 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": \"{{org}}\",\n  \"deliveryPointId\": \"{{point}}\",\n  \"requestedDeliveryAt\": \"{{future}}\",\n  \"comment\": \"Бизнес-сценарий\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Создать черновик\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"DRAFT\"); pm.expect(b.lines).to.have.lengthOf(0); pm.expect(b.totalAmount).to.equal(0);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "45. Отменить черновик",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/cancel",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Отменить черновик. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}},\n  \"reason\": \"Обед больше не нужен\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Отменить черновик\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"CANCELLED\"); pm.expect(b.version).to.equal(Number(pm.collectionVariables.get(\"version\"))+1);",
+                  "  pm.expect(b.totalAmount).to.equal(Number(pm.collectionVariables.get(\"total\"))); pm.expect(b.lines).to.have.deep.members(JSON.parse(pm.collectionVariables.get(\"lines\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "46. Создать черновик",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Создать черновик. Ожидается HTTP 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": \"{{org}}\",\n  \"deliveryPointId\": \"{{point}}\",\n  \"requestedDeliveryAt\": \"{{future}}\",\n  \"comment\": \"Бизнес-сценарий\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Создать черновик\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"DRAFT\"); pm.expect(b.lines).to.have.lengthOf(0); pm.expect(b.totalAmount).to.equal(0);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "47. Добавить блюда в черновик",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/lines",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Добавить блюда в черновик. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}},\n  \"lines\": [\n    {\n      \"dishId\": \"{{dishB}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Добавить блюда в черновик\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"DRAFT\"); pm.expect(b.totalAmount).to.equal(320);",
+                  "  pm.expect(b.lines.map(x=>({dishId:x.dishId,quantity:x.quantity}))).to.have.deep.members(JSON.parse(pm.variables.replaceIn(\"[{\\\"dishId\\\": \\\"{{dishB}}\\\", \\\"quantity\\\": 1}]\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "48. Отправить заказ перед отменой",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/submit",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Отправить заказ перед отменой. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Отправить заказ перед отменой\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"SUBMITTED\"); pm.expect(b.version).to.equal(Number(pm.collectionVariables.get(\"version\"))+1);",
+                  "  b.lines.forEach(x=>{pm.expect(x.dishNameSnapshot).to.be.a(\"string\").and.not.empty; pm.expect(x.unitPriceSnapshot).to.be.above(0); pm.expect(x.lineAmount).to.equal(x.quantity*x.unitPriceSnapshot);}); pm.expect(b.totalAmount).to.equal(b.lines.reduce((s,x)=>s+x.lineAmount,0));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "49. Отменить отправленный заказ",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/cancel",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Отменить отправленный заказ. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}},\n  \"reason\": \"Изменились планы организации\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Отменить отправленный заказ\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"CANCELLED\"); pm.expect(b.version).to.equal(Number(pm.collectionVariables.get(\"version\"))+1);",
+                  "  pm.expect(b.totalAmount).to.equal(Number(pm.collectionVariables.get(\"total\"))); pm.expect(b.lines).to.have.deep.members(JSON.parse(pm.collectionVariables.get(\"lines\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "50. Создать черновик",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Создать черновик. Ожидается HTTP 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": \"{{org}}\",\n  \"deliveryPointId\": \"{{point}}\",\n  \"requestedDeliveryAt\": \"{{future}}\",\n  \"comment\": \"Бизнес-сценарий\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Создать черновик\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"DRAFT\"); pm.expect(b.lines).to.have.lengthOf(0); pm.expect(b.totalAmount).to.equal(0);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "51. Добавить блюда в черновик",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/lines",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Добавить блюда в черновик. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}},\n  \"lines\": [\n    {\n      \"dishId\": \"{{dishB}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Добавить блюда в черновик\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"DRAFT\"); pm.expect(b.totalAmount).to.equal(320);",
+                  "  pm.expect(b.lines.map(x=>({dishId:x.dishId,quantity:x.quantity}))).to.have.deep.members(JSON.parse(pm.variables.replaceIn(\"[{\\\"dishId\\\": \\\"{{dishB}}\\\", \\\"quantity\\\": 1}]\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "52. Отправить заказ для подтверждения",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/submit",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Отправить заказ для подтверждения. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Отправить заказ для подтверждения\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"SUBMITTED\"); pm.expect(b.version).to.equal(Number(pm.collectionVariables.get(\"version\"))+1);",
+                  "  b.lines.forEach(x=>{pm.expect(x.dishNameSnapshot).to.be.a(\"string\").and.not.empty; pm.expect(x.unitPriceSnapshot).to.be.above(0); pm.expect(x.lineAmount).to.equal(x.quantity*x.unitPriceSnapshot);}); pm.expect(b.totalAmount).to.equal(b.lines.reduce((s,x)=>s+x.lineAmount,0));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "53. Подтвердить заказ перед отменой",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/confirm",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Подтвердить заказ перед отменой. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Подтвердить заказ перед отменой\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"CONFIRMED\"); pm.expect(b.version).to.equal(Number(pm.collectionVariables.get(\"version\"))+1);",
+                  "  pm.expect(b.totalAmount).to.equal(Number(pm.collectionVariables.get(\"total\"))); pm.expect(b.lines).to.have.deep.members(JSON.parse(pm.collectionVariables.get(\"lines\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "54. Отменить подтверждённый заказ",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/cancel",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Отменить подтверждённый заказ. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}},\n  \"reason\": \"Отмена до начала приготовления\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Отменить подтверждённый заказ\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"CANCELLED\"); pm.expect(b.version).to.equal(Number(pm.collectionVariables.get(\"version\"))+1);",
+                  "  pm.expect(b.totalAmount).to.equal(Number(pm.collectionVariables.get(\"total\"))); pm.expect(b.lines).to.have.deep.members(JSON.parse(pm.collectionVariables.get(\"lines\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04. Изменение и удаление черновика",
+      "item": [
+        {
+          "name": "55. Создать черновик",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/orders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Создать черновик. Ожидается HTTP 201.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationId\": \"{{org}}\",\n  \"deliveryPointId\": \"{{point}}\",\n  \"requestedDeliveryAt\": \"{{future}}\",\n  \"comment\": \"Бизнес-сценарий\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Создать черновик\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"DRAFT\"); pm.expect(b.lines).to.have.lengthOf(0); pm.expect(b.totalAmount).to.equal(0);",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "56. Добавить блюда в черновик",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/lines",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Добавить блюда в черновик. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}},\n  \"lines\": [\n    {\n      \"dishId\": \"{{dishB}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Добавить блюда в черновик\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"DRAFT\"); pm.expect(b.totalAmount).to.equal(320);",
+                  "  pm.expect(b.lines.map(x=>({dishId:x.dishId,quantity:x.quantity}))).to.have.deep.members(JSON.parse(pm.variables.replaceIn(\"[{\\\"dishId\\\": \\\"{{dishB}}\\\", \\\"quantity\\\": 1}]\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "57. Изменить количество порций с 1 на 5",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/lines",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Изменить количество порций с 1 на 5. Ожидается HTTP 200, количество 5 и сумма 1600.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}},\n  \"lines\": [\n    {\n      \"dishId\": \"{{dishB}}\",\n      \"quantity\": 5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Изменить количество порций с 1 на 5\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"DRAFT\"); pm.expect(b.totalAmount).to.equal(1600);",
+                  "  pm.expect(b.lines.map(x=>({dishId:x.dishId,quantity:x.quantity}))).to.have.deep.members(JSON.parse(pm.variables.replaceIn(\"[{\\\"dishId\\\": \\\"{{dishB}}\\\", \\\"quantity\\\": 5}]\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "58. Очистить состав черновика",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}/lines",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "description": "Очистить состав черновика. Ожидается HTTP 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expectedVersion\": {{version}},\n  \"lines\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Очистить состав черновика\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.status).to.equal(\"DRAFT\"); pm.expect(b.totalAmount).to.equal(0);",
+                  "  pm.expect(b.lines.map(x=>({dishId:x.dishId,quantity:x.quantity}))).to.have.deep.members(JSON.parse(pm.variables.replaceIn(\"[]\")));",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const b = pm.response.json();",
+                  "  pm.collectionVariables.set(\"order\", b.id);",
+                  "  pm.collectionVariables.set(\"version\", b.version);",
+                  "  pm.collectionVariables.set(\"total\", b.totalAmount);",
+                  "  pm.collectionVariables.set(\"lines\", JSON.stringify(b.lines));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "59. Удалить пустой черновик",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}",
+            "header": [],
+            "description": "Удалить пустой черновик. Ожидается HTTP 204."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Удалить пустой черновик\", () => {",
+                  "  pm.response.to.have.status(204);",
+                  "",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "60. Удалённый черновик не найден",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/orders/{{order}}",
+            "header": [],
+            "description": "Ожидается HTTP 404."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Удалённый черновик не найден\", () => {",
+                  "  pm.response.to.have.status(404);",
+                  "  const b = pm.response.json();",
+                  "pm.expect(b.code).to.equal('RESOURCE_NOT_FOUND');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05. Отключить тестовые справочники",
+      "item": [
+        {
+          "name": "61. Деактивировать горячее",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/dishes/{{dishB}}",
+            "header": [],
+            "description": "Деактивировать горячее. Ожидается HTTP 204."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Деактивировать горячее\", () => {",
+                  "  pm.response.to.have.status(204);",
+                  "",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "62. Деактивировать свою точку",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/delivery-points/{{point}}",
+            "header": [],
+            "description": "Деактивировать свою точку. Ожидается HTTP 204."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Деактивировать свою точку\", () => {",
+                  "  pm.response.to.have.status(204);",
+                  "",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "63. Деактивировать чужую тестовую точку",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/delivery-points/{{foreignPoint}}",
+            "header": [],
+            "description": "Деактивировать чужую тестовую точку. Ожидается HTTP 204."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Деактивировать чужую тестовую точку\", () => {",
+                  "  pm.response.to.have.status(204);",
+                  "",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "64. Деактивировать свою организацию",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/organizations/{{org}}",
+            "header": [],
+            "description": "Деактивировать свою организацию. Ожидается HTTP 204."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Деактивировать свою организацию\", () => {",
+                  "  pm.response.to.have.status(204);",
+                  "",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "65. Деактивировать вторую тестовую организацию",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/organizations/{{otherOrg}}",
+            "header": [],
+            "description": "Деактивировать вторую тестовую организацию. Ожидается HTTP 204."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Деактивировать вторую тестовую организацию\", () => {",
+                  "  pm.response.to.have.status(204);",
+                  "",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const stateKeys = [\"category\", \"dishA\", \"dishB\", \"foreignPoint\", \"future\", \"lines\", \"order\", \"org\", \"otherOrg\", \"past\", \"point\", \"runId\", \"startResponse\", \"startVersion\", \"total\", \"unusedCategory\", \"version\"];",
+          "if (pm.info.requestName === '01. Создать организацию') {",
+          "  stateKeys.forEach(k => pm.collectionVariables.unset(k));",
+          "  pm.collectionVariables.set('runId',pm.variables.replaceIn('{{$guid}}'));",
+          "  pm.collectionVariables.set('future',new Date(Date.now()+7*86400000).toISOString());",
+          "  pm.collectionVariables.set('past',new Date(Date.now()-86400000).toISOString());",
+          "}",
+          "stateKeys.forEach(k => pm.variables.set(k,pm.collectionVariables.get(k) ?? ''));",
+          "const template = pm.request.url.toString() + (pm.request.body ? pm.request.body.raw || '' : '');",
+          "const names = [...template.matchAll(/\\{\\{(\\w+)\\}\\}/g)].map(m => m[1]);",
+          "const missing = [...new Set(names)].filter(k => stateKeys.includes(k) && pm.variables.get(k) === '');",
+          "if (missing.length) {",
+          "  pm.test('Предыдущие шаги выполнены', () => pm.expect.fail('Нет переменных: '+missing.join(', ')+'. Запустите коллекцию с первого запроса.'));",
+          "  pm.execution.skipRequest();",
+          "}",
+          "const trace = 'postman-'+pm.variables.replaceIn('{{$guid}}');",
+          "pm.variables.set('requestTrace',trace);",
+          "pm.request.headers.upsert({key:'X-Trace-Id',value:trace});"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('X-Trace-Id прошёл через Gateway и сервис', () => pm.expect(pm.response.headers.get('X-Trace-Id')).to.equal(pm.variables.get('requestTrace')));",
+          "if (pm.response.code >= 400) pm.test('Единый формат ошибки', () => {",
+          "  const b = pm.response.json();",
+          "  pm.expect(b).to.have.all.keys('code','message','fieldErrors','traceId');",
+          "  pm.expect(b.code).to.be.a('string').and.not.empty;",
+          "  pm.expect(b.message).to.be.a('string').and.not.empty;",
+          "  pm.expect(b.fieldErrors).to.be.an('array');",
+          "  pm.expect(b.traceId).to.equal(pm.variables.get('requestTrace'));",
+          "});",
+          "if (pm.response.code === 204) pm.test('Пустой ответ 204', () => pm.expect(pm.response.text()).to.equal(''));"
+        ]
+      }
+    }
+  ]
+}

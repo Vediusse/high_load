@@ -9,3 +9,6 @@ target
 Планировка
 *.iml
 *.log
+
+**/target
+Архив.zip

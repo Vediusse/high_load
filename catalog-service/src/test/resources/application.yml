@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: catalog-service
+  cloud:
+    config:
+      enabled: false
+  flyway:
+    enabled: true
+eureka:
+  client:
+    enabled: false
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true

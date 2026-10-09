@@ -10,7 +10,9 @@ import java.util.UUID;
 import reactor.core.publisher.Mono;
 import ru.itmo.highload.common.web.BlockingRequests;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -49,17 +51,19 @@ public class OrderController {
     @PostMapping
     @Operation(summary = "Создать пустой черновик заказа")
     @ApiResponse(responseCode = "201", description = "Черновик создан")
-    public Mono<ResponseEntity<OrderResponse>> create(@Valid @RequestBody CreateOrderRequest request) {
+    @ResponseStatus(HttpStatus.CREATED)
+    public Mono<OrderResponse> create(@Valid @RequestBody CreateOrderRequest request, ServerHttpResponse httpResponse) {
         return blocking.call(() -> {
             OrderResponse response = orderService.createDraft(request);
-            return ResponseEntity.created(URI.create("/api/v1/orders/" + response.id())).body(response);
+            httpResponse.getHeaders().setLocation(URI.create("/api/v1/orders/" + response.id()));
+            return response;
         });
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Получить заказ с позициями")
-    public Mono<ResponseEntity<OrderResponse>> get(@PathVariable UUID id) {
-        return blocking.call(() -> ResponseEntity.ok(orderService.getOrder(id)));
+    public Mono<OrderResponse> get(@PathVariable UUID id) {
+        return blocking.call(() -> orderService.getOrder(id));
     }
 
     @GetMapping
@@ -68,11 +72,11 @@ public class OrderController {
             responseCode = "200",
             description = "Страница заказов",
             headers = @Header(name = "X-Total-Count", description = "Общее количество заказов по фильтру"))
-    public Mono<ResponseEntity<PageResponse<OrderResponse>>> list(
+    public Mono<PageResponse<OrderResponse>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) OrderStatus status,
-            @RequestParam(required = false) UUID organizationId) {
+            @RequestParam(required = false) UUID organizationId, ServerHttpResponse httpResponse) {
         return blocking.call(() -> {
             PageRequestValues pageRequest = validatePage(page, size);
             OrderPageResult result = orderService.listOrders(
@@ -80,77 +84,77 @@ public class OrderController {
                     pageRequest.size(),
                     status,
                     organizationId);
-            return ResponseEntity.ok()
-                    .header("X-Total-Count", Long.toString(result.totalCount()))
-                    .body(result.body());
+            httpResponse.getHeaders().set("X-Total-Count", Long.toString(result.totalCount()));
+            return result.body();
         });
     }
 
     @PutMapping("/{id}/details")
     @Operation(summary = "Изменить детали черновика")
-    public Mono<ResponseEntity<OrderResponse>> updateDetails(
+    public Mono<OrderResponse> updateDetails(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateOrderDetailsRequest request) {
-        return blocking.call(() -> ResponseEntity.ok(orderService.updateDraftDetails(id, request)));
+        return blocking.call(() -> orderService.updateDraftDetails(id, request));
     }
 
     @PutMapping("/{id}/lines")
     @Operation(summary = "Атомарно заменить позиции черновика")
-    public Mono<ResponseEntity<OrderResponse>> replaceLines(
+    public Mono<OrderResponse> replaceLines(
             @PathVariable UUID id,
             @Valid @RequestBody ReplaceOrderLinesRequest request) {
-        return blocking.call(() -> ResponseEntity.ok(orderService.replaceDraftLines(id, request)));
+        return blocking.call(() -> orderService.replaceDraftLines(id, request));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Удалить пустой черновик")
     @ApiResponse(responseCode = "204", description = "Пустой черновик удалён")
-    public Mono<ResponseEntity<Void>> delete(@PathVariable UUID id) {
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> delete(@PathVariable UUID id) {
         return blocking.call(() -> {
             orderService.deleteEmptyDraft(id);
-            return ResponseEntity.noContent().build();
+            return null;
         });
     }
 
     @PostMapping("/{id}/submit")
     @Operation(summary = "Отправить заказ и зафиксировать снимки цен")
-    public Mono<ResponseEntity<OrderResponse>> submit(
+    public Mono<OrderResponse> submit(
             @PathVariable UUID id,
             @Valid @RequestBody OrderCommandRequest request) {
-        return blocking.call(() -> ResponseEntity.ok(orderService.submit(id, request.expectedVersion())));
+        return blocking.call(() -> orderService.submit(id, request.expectedVersion()));
     }
 
     @PostMapping("/{id}/confirm")
     @Operation(summary = "Подтвердить заказ целиком")
-    public Mono<ResponseEntity<OrderResponse>> confirm(
+    public Mono<OrderResponse> confirm(
             @PathVariable UUID id,
             @Valid @RequestBody OrderCommandRequest request) {
-        return blocking.call(() -> ResponseEntity.ok(orderService.confirm(id, request.expectedVersion())));
+        return blocking.call(() -> orderService.confirm(id, request.expectedVersion()));
     }
 
     @PostMapping("/{id}/reject")
     @Operation(summary = "Отклонить заказ целиком с причиной")
-    public Mono<ResponseEntity<OrderResponse>> reject(
+    public Mono<OrderResponse> reject(
             @PathVariable UUID id,
             @Valid @RequestBody RejectOrderRequest request) {
-        return blocking.call(() -> ResponseEntity.ok(orderService.reject(id, request)));
+        return blocking.call(() -> orderService.reject(id, request));
     }
 
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Отменить заказ до начала приготовления")
-    public Mono<ResponseEntity<OrderResponse>> cancel(
+    public Mono<OrderResponse> cancel(
             @PathVariable UUID id,
             @Valid @RequestBody CancelOrderRequest request) {
-        return blocking.call(() -> ResponseEntity.ok(orderService.cancel(id, request)));
+        return blocking.call(() -> orderService.cancel(id, request));
     }
 
     @GetMapping("/{id}/history")
     @Operation(summary = "Получить хронологическую страницу истории статусов")
-    public Mono<ResponseEntity<PageResponse<OrderStatusHistoryResponse>>> history(
+    public Mono<PageResponse<OrderStatusHistoryResponse>> history(
             @PathVariable UUID id,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return blocking.call(() -> ResponseEntity.ok(orderService.getHistory(id, Pagination.pageRequest(page, size))));
+        return blocking.call(() -> orderService.getHistory(id, Pagination.pageRequest(page, size)));
     }
 
     private PageRequestValues validatePage(int page, int size) {

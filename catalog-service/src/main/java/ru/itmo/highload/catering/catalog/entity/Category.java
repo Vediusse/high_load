@@ -2,12 +2,17 @@ package ru.itmo.highload.catering.catalog.entity;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Table;
 
 @Table("category")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Category {
 
     @Id
@@ -16,9 +21,6 @@ public class Category {
     @NotBlank
     @Size(max = 100)
     private String name;
-
-    protected Category() {
-    }
 
     public Category(String name) {
         this.id = UUID.randomUUID();
@@ -30,13 +32,5 @@ public class Category {
             throw new IllegalArgumentException("Название категории не должно быть пустым и длиннее 100 символов");
         }
         this.name = name.trim();
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public String getName() {
-        return name;
     }
 }

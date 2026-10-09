@@ -13,9 +13,14 @@ import jakarta.validation.constraints.Size;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "organization")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Organization {
 
     private static final String PHONE_PATTERN = "^\\+[1-9]\\d{7,14}$";
@@ -41,10 +46,8 @@ public class Organization {
     private long version;
 
     @OneToMany(mappedBy = "organization", fetch = FetchType.LAZY)
+    @Getter(AccessLevel.NONE)
     private Set<DeliveryPoint> deliveryPoints = new HashSet<>();
-
-    protected Organization() {
-    }
 
     public Organization(String name, String phone) {
         this.id = UUID.randomUUID();
@@ -66,26 +69,6 @@ public class Organization {
             throw new IllegalArgumentException("Точка выдачи должна принадлежать организации");
         }
         deliveryPoints.add(deliveryPoint);
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getPhone() {
-        return phone;
-    }
-
-    public boolean isActive() {
-        return active;
-    }
-
-    public long getVersion() {
-        return version;
     }
 
     private static String requireText(String value, String label, int maxLength) {

@@ -86,13 +86,29 @@ class KitchenIT {
     @Test void breakerOpensWithoutCallingOwnerAndRecoversThroughHalfOpen() throws Exception {
         var order=owner.add(OrderStatus.CONFIRMED);queue(0,20,200);
         var breaker=breakers.circuitBreaker("order");breaker.reset();owner.mode="down";
-        for(int i=0;i<5;i++)queue(0,20,503);
+        for(int i=0;i<breaker.getCircuitBreakerConfig().getMinimumNumberOfCalls();i++)queue(0,20,503);
         assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
         int before=owner.calls.get();queue(0,20,503);command(order,"start-cooking",503,null);
         assertThat(owner.calls.get()).isEqualTo(before);assertTask(order.id(),"CONFIRMED",order.version());
-        owner.mode="normal";Thread.sleep(5100);
-        // queue performs the two permitted probes: page and bounded state batch.
-        queue(0,20,200);assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+        owner.mode="normal";
+        org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            // Read-only requests exercise recovery without replaying a business command.
+            queue(0,20,200);
+            assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+        });
+    }
+
+    @Test void failedHalfOpenProbesReopenBreakerAndStopNetworkCalls() {
+        var breaker = breakers.circuitBreaker("order");
+        breaker.transitionToOpenState();
+        breaker.transitionToHalfOpenState();
+        owner.mode = "down";
+        int probes = breaker.getCircuitBreakerConfig().getPermittedNumberOfCallsInHalfOpenState();
+        for (int i = 0; i < probes; i++) queue(0,20,503);
+        assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
+        assertThat(owner.calls.get()).isEqualTo(probes);
+        queue(0,20,503);
+        assertThat(owner.calls.get()).isEqualTo(probes);
     }
 
     @Test void reconciliationIsBoundedAndEventuallyChecksTasksOutsideTheRequestedPage() {
@@ -131,8 +147,14 @@ class KitchenIT {
 
     @Test void businessErrorsDoNotOpenBreakerOrCreateTasks() {
         var submitted=owner.add(OrderStatus.SUBMITTED);
-        for(int i=0;i<7;i++) command(submitted,"start-cooking",409,null);
-        assertThat(breakers.circuitBreaker("order").getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+        var breaker = breakers.circuitBreaker("order");
+        int attempts = breaker.getCircuitBreakerConfig().getMinimumNumberOfCalls() + 1;
+        for(int i=0;i<attempts;i++) command(submitted,"start-cooking",409,null);
+        assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+        // Each command first reads the owner successfully; its subsequent 409 is ignored.
+        assertThat(breaker.getMetrics().getNumberOfSuccessfulCalls()).isEqualTo(attempts);
+        assertThat(breaker.getMetrics().getNumberOfFailedCalls()).isZero();
+        assertThat(breaker.getMetrics().getNumberOfBufferedCalls()).isEqualTo(attempts);
         assertThat(jdbc.queryForObject("select count(*) from kitchen_task",Integer.class)).isZero();
         client.post().uri("/api/v1/orders/"+UUID.randomUUID()+"/start-cooking").bodyValue(Map.of("expectedVersion",0))
                 .exchange().expectStatus().isNotFound().expectBody().jsonPath("$.code").isEqualTo("RESOURCE_NOT_FOUND");

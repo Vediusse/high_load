@@ -6,7 +6,6 @@ import java.util.List;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ServerWebExchange;
@@ -18,17 +17,17 @@ public class PersistenceExceptionHandler {
             org.springframework.dao.QueryTimeoutException.class,
             org.springframework.transaction.CannotCreateTransactionException.class,
             org.springframework.transaction.TransactionTimedOutException.class})
-    ResponseEntity<ApiError> unavailable(RuntimeException error, ServerWebExchange exchange) {
+    ApiError unavailable(RuntimeException error, ServerWebExchange exchange) {
         return response(HttpStatus.SERVICE_UNAVAILABLE, "DEPENDENCY_UNAVAILABLE",
                 "Хранилище временно недоступно", List.of(), exchange);
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
-    ResponseEntity<ApiError> optimistic(OptimisticLockingFailureException error, ServerWebExchange exchange) {
+    ApiError optimistic(OptimisticLockingFailureException error, ServerWebExchange exchange) {
         return response(HttpStatus.CONFLICT, "RESOURCE_VERSION_CONFLICT", "Объект был изменён параллельно", List.of(), exchange);
     }
     @ExceptionHandler(DataIntegrityViolationException.class)
-    ResponseEntity<ApiError> integrity(DataIntegrityViolationException error, ServerWebExchange exchange) {
+    ApiError integrity(DataIntegrityViolationException error, ServerWebExchange exchange) {
         return response(HttpStatus.CONFLICT, "DATA_INTEGRITY_CONFLICT", "Изменение конфликтует с текущими данными", List.of(), exchange);
     }
 }

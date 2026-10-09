@@ -16,6 +16,9 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(
@@ -23,6 +26,8 @@ import java.util.UUID;
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_order_line_order_dish",
                 columnNames = {"order_id", "dish_id"}))
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class OrderLine {
 
     @Id
@@ -31,6 +36,7 @@ public class OrderLine {
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false)
+    @Getter(AccessLevel.NONE)
     private CorporateOrder order;
 
     @NotNull
@@ -50,9 +56,6 @@ public class OrderLine {
     @Digits(integer = 17, fraction = 2)
     @Column(name = "unit_price_snapshot", precision = 19, scale = 2)
     private BigDecimal unitPriceSnapshot;
-
-    protected OrderLine() {
-    }
 
     OrderLine(CorporateOrder order, UUID dishId, int quantity) {
         if (order == null) {
@@ -82,26 +85,6 @@ public class OrderLine {
         }
         this.dishNameSnapshot = dishName.trim();
         this.unitPriceSnapshot = unitPrice;
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public UUID getDishId() {
-        return dishId;
-    }
-
-    public String getDishNameSnapshot() {
-        return dishNameSnapshot;
-    }
-
-    public int getQuantity() {
-        return quantity;
-    }
-
-    public BigDecimal getUnitPriceSnapshot() {
-        return unitPriceSnapshot;
     }
 
     public BigDecimal getLineAmount() {

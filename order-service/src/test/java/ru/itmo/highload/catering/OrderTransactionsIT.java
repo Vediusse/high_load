@@ -193,9 +193,10 @@ class OrderTransactionsIT extends AbstractPostgresIT {
         OrderResponse draft = createDraft(fixture);
         OrderResponse filled = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
                 draft.version(), List.of(new OrderLineInput(dish.getId(), 2))));
-        breakers.circuitBreaker("catalog").reset();
+        var breaker = breakers.circuitBreaker("catalog");
+        breaker.reset();
         catalog.failureStatus = 503;
-        for (int attempt = 0; attempt < 5; attempt++) {
+        for (int attempt = 0; attempt < breaker.getCircuitBreakerConfig().getMinimumNumberOfCalls(); attempt++) {
             assertThatThrownBy(() -> orderService.submit(filled.id(), filled.version()))
                     .isInstanceOfSatisfying(ApiException.class, error -> {
                         assertThat(error.getStatus().value()).isEqualTo(503);
@@ -214,11 +215,57 @@ class OrderTransactionsIT extends AbstractPostgresIT {
         org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(8)).ignoreException(ApiException.class).untilAsserted(() -> {
             assertThat(orderService.submit(filled.id(), filled.version()).status().name()).isEqualTo("SUBMITTED");
         });
-        // A second successful network call completes the half-open trial window.
-        var another = createDraft(fixture);
-        orderService.replaceDraftLines(another.id(), new ReplaceOrderLinesRequest(another.version(),
-                List.of(new OrderLineInput(dish.getId(), 1))));
+        // Complete the remaining successful probes in the half-open window.
+        for (int probe = 1; probe < breaker.getCircuitBreakerConfig().getPermittedNumberOfCallsInHalfOpenState(); probe++) {
+            var another = createDraft(fixture);
+            orderService.replaceDraftLines(another.id(), new ReplaceOrderLinesRequest(another.version(),
+                    List.of(new OrderLineInput(dish.getId(), 1))));
+        }
         assertThat(breakers.circuitBreaker("catalog").getState().name()).isEqualTo("CLOSED");
+    }
+
+    @Test
+    void failedHalfOpenProbesReopenCatalogCircuit() {
+        var ids = Set.of(dish("Суп", "100.00").getId());
+        var breaker = breakers.circuitBreaker("catalog");
+        breaker.transitionToOpenState();
+        breaker.transitionToHalfOpenState();
+        catalog.failureStatus = 503;
+        int probes = breaker.getCircuitBreakerConfig().getPermittedNumberOfCallsInHalfOpenState();
+        for (int i = 0; i < probes; i++) {
+            assertThatThrownBy(() -> catalogGateway.getActiveDishPrices(ids)).isInstanceOf(ApiException.class);
+        }
+        assertThat(breaker.getState().name()).isEqualTo("OPEN");
+        assertThat(catalog.requests.get()).isEqualTo(probes);
+        assertThatThrownBy(() -> catalogGateway.getActiveDishPrices(ids)).isInstanceOf(ApiException.class);
+        assertThat(catalog.requests.get()).isEqualTo(probes);
+    }
+
+    @Test
+    void halfOpenWithoutEnoughProbesHasBoundedLifetime() {
+        var breaker = breakers.circuitBreaker("catalog");
+        breaker.transitionToOpenState();
+        breaker.transitionToHalfOpenState();
+        org.awaitility.Awaitility.await()
+                .atMost(breaker.getCircuitBreakerConfig().getMaxWaitDurationInHalfOpenState()
+                        .plusSeconds(2))
+                .untilAsserted(() -> assertThat(breaker.getState().name()).isEqualTo("OPEN"));
+        assertThat(catalog.requests.get()).isZero();
+    }
+
+    @Test
+    void slowSuccessfulCallsOpenCircuitOnlyAfterMinimumSample() {
+        var breaker = breakers.circuitBreaker("catalog");
+        var config = breaker.getCircuitBreakerConfig();
+        long slowMillis = config.getSlowCallDurationThreshold().toMillis() + 1;
+        for (int i = 1; i < config.getMinimumNumberOfCalls(); i++) {
+            breaker.onSuccess(slowMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+        }
+        assertThat(breaker.getState().name()).isEqualTo("CLOSED");
+        breaker.onSuccess(slowMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+        assertThat(breaker.getState().name()).isEqualTo("OPEN");
+        assertThat(breaker.getMetrics().getNumberOfFailedCalls()).isZero();
+        assertThat(breaker.getMetrics().getSlowCallRate()).isEqualTo(100);
     }
 
     @Test
@@ -244,13 +291,15 @@ class OrderTransactionsIT extends AbstractPostgresIT {
     void businessErrorsDoNotOpenCircuitAndTraceReachesCatalog() {
         Fixture fixture = fixture();
         OrderResponse draft = createDraft(fixture);
-        for (int attempt = 0; attempt < 6; attempt++) {
+        for (int attempt = 0; attempt < breakers.circuitBreaker("catalog").getCircuitBreakerConfig().getMinimumNumberOfCalls() + 1; attempt++) {
             assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
                     draft.version(), List.of(new OrderLineInput(UUID.randomUUID(), 1)))))
                     .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getStatus().value()).isEqualTo(404));
         }
         assertThat(breakers.circuitBreaker("catalog").getState().name()).isEqualTo("CLOSED");
-        assertThat(catalog.requests.get()).isEqualTo(6);
+        assertThat(breakers.circuitBreaker("catalog").getMetrics().getNumberOfBufferedCalls()).isZero();
+        assertThat(catalog.requests.get()).isEqualTo(
+                breakers.circuitBreaker("catalog").getCircuitBreakerConfig().getMinimumNumberOfCalls() + 1);
         org.slf4j.MDC.put("traceId", "order-catalog-trace");
         try {
             Dish dish = dish("Борщ", "180.00");

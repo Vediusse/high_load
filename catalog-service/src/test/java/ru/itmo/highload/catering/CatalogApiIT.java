@@ -16,9 +16,10 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import reactor.test.StepVerifier;
 import ru.itmo.highload.catering.catalog.entity.Dish;
+import ru.itmo.highload.catering.catalog.entity.Category;
+import ru.itmo.highload.catering.catalog.repository.CategoryRepository;
+import ru.itmo.highload.catering.catalog.repository.DishRepository;
 import static org.assertj.core.api.Assertions.*;
-import static org.springframework.data.relational.core.query.Query.query;
-import static org.springframework.data.relational.core.query.Criteria.where;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         useMainMethod = SpringBootTest.UseMainMethod.ALWAYS)
@@ -38,6 +39,8 @@ class CatalogApiIT {
     }
     @Autowired WebTestClient client;
     @Autowired R2dbcEntityTemplate template;
+    @Autowired CategoryRepository categories;
+    @Autowired DishRepository dishes;
     @Autowired org.springframework.context.ApplicationContext context;
 
     @Test void sharedLibraryDoesNotEnableBlockingPersistenceInCatalog() {
@@ -173,18 +176,57 @@ class CatalogApiIT {
     }
     @Test void databaseConstraintsAndOptimisticLockingSurviveR2dbcMigration() {
         UUID id = dish("Борщ", "180.00", Set.of());
-        Dish first = template.selectOne(query(where("id").is(id)), Dish.class).block();
-        Dish stale = template.selectOne(query(where("id").is(id)), Dish.class).block();
+        Dish first = dishes.findById(id).block();
+        Dish stale = dishes.findById(id).block();
         first.update("Щи", "", new BigDecimal("190.00"), Set.of());
-        StepVerifier.create(template.update(first)).expectNextCount(1).verifyComplete();
+        StepVerifier.create(dishes.save(first)).expectNextCount(1).verifyComplete();
         stale.deactivate();
-        StepVerifier.create(template.update(stale)).expectError(org.springframework.dao.OptimisticLockingFailureException.class).verify();
+        StepVerifier.create(dishes.save(stale)).expectError(org.springframework.dao.OptimisticLockingFailureException.class).verify();
         StepVerifier.create(template.getDatabaseClient().sql("UPDATE dish SET current_price = -1 WHERE id = :id")
                 .bind("id", id).fetch().rowsUpdated()).expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
         StepVerifier.create(template.getDatabaseClient().sql("INSERT INTO dish_category VALUES (:dish, :category)")
                 .bind("dish", id).bind("category", UUID.randomUUID()).fetch().rowsUpdated())
                 .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
     }
+    @Test void assignedCategoryUuidSupportsExplicitInsertAndSubsequentSave() {
+        Category category = new Category("Супы");
+        UUID assignedId = category.getId();
+        StepVerifier.create(categories.insert(category))
+                .assertNext(saved -> assertThat(saved.getId()).isEqualTo(assignedId)).verifyComplete();
+
+        Category loaded = categories.findById(assignedId).block();
+        loaded.update("Горячие супы");
+        StepVerifier.create(categories.save(loaded))
+                .assertNext(saved -> assertThat(saved.getId()).isEqualTo(assignedId)).verifyComplete();
+        StepVerifier.create(categories.findById(assignedId))
+                .assertNext(saved -> assertThat(saved.getName()).isEqualTo("Горячие супы")).verifyComplete();
+        StepVerifier.create(categories.count()).expectNext(1L).verifyComplete();
+        // An explicit insert never silently overwrites an existing category.
+        StepVerifier.create(categories.insert(category))
+                .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
+        StepVerifier.create(categories.findAllById(Set.of(assignedId)))
+                .assertNext(saved -> assertThat(saved.getName()).isEqualTo("Горячие супы")).verifyComplete();
+        StepVerifier.create(categories.delete(loaded)).verifyComplete();
+        StepVerifier.create(categories.findById(assignedId)).verifyComplete();
+    }
+
+    @Test void categoryPagesDoNotSkipTheLookaheadRow() {
+        List<String> expected = new ArrayList<>();
+        for (int i = 0; i < 5; i++) expected.add(category("Категория " + i).toString());
+        // PostgreSQL UUID order corresponds to lexical order of the canonical UUID strings.
+        expected.sort(Comparator.naturalOrder());
+        List<String> received = new ArrayList<>();
+        for (int page = 0; page < 3; page++) {
+            JsonNode result = client.get().uri("/api/v1/categories?page=" + page + "&size=2")
+                    .exchange().expectStatus().isOk().expectBody(JsonNode.class).returnResult().getResponseBody();
+            assertThat(result.get("page").asInt()).isEqualTo(page);
+            assertThat(result.get("size").asInt()).isEqualTo(2);
+            assertThat(result.get("hasNext").asBoolean()).isEqualTo(page < 2);
+            for (JsonNode item : result.get("items")) received.add(item.get("id").asText());
+        }
+        assertThat(received).containsExactlyElementsOf(expected);
+    }
+
     @Test void failedRelationInsertRollsBackDishAndPreviousRelations() {
         UUID soups = category("Супы"), mains = category("Обеды");
         UUID id = dish("Борщ", "180.00", Set.of(soups));

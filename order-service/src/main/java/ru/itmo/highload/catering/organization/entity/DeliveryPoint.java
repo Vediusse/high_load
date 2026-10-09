@@ -12,9 +12,14 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "delivery_point")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class DeliveryPoint {
 
     private static final String PHONE_PATTERN = "^\\+[1-9]\\d{7,14}$";
@@ -50,9 +55,6 @@ public class DeliveryPoint {
     @Column(nullable = false)
     private boolean active;
 
-    protected DeliveryPoint() {
-    }
-
     public DeliveryPoint(
             Organization organization,
             String name,
@@ -77,34 +79,6 @@ public class DeliveryPoint {
 
     public void deactivate() {
         this.active = false;
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public Organization getOrganization() {
-        return organization;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getAddress() {
-        return address;
-    }
-
-    public String getContactName() {
-        return contactName;
-    }
-
-    public String getContactPhone() {
-        return contactPhone;
-    }
-
-    public boolean isActive() {
-        return active;
     }
 
     private static String requireText(String value, String label, int maxLength) {

@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 import ru.itmo.highload.catering.kitchen.client.dto.*;
@@ -25,26 +24,26 @@ public class KitchenController {
 
     @PostMapping("/{id}/start-cooking")
     @Operation(summary = "Начать приготовление подтверждённого заказа")
-    public Mono<ResponseEntity<OrderResponse>> startCooking(
+    public Mono<OrderResponse> startCooking(
             @PathVariable UUID id,
             @Valid @RequestBody OrderCommandRequest request) {
-        return blocking.call(() -> ResponseEntity.ok(kitchen.execute(id, request.expectedVersion(), KitchenAction.START_COOKING)));
+        return blocking.call(() -> kitchen.execute(id, request.expectedVersion(), KitchenAction.START_COOKING));
     }
 
     @PostMapping("/{id}/mark-ready")
     @Operation(summary = "Отметить заказ готовым")
-    public Mono<ResponseEntity<OrderResponse>> markReady(
+    public Mono<OrderResponse> markReady(
             @PathVariable UUID id,
             @Valid @RequestBody OrderCommandRequest request) {
-        return blocking.call(() -> ResponseEntity.ok(kitchen.execute(id, request.expectedVersion(), KitchenAction.MARK_READY)));
+        return blocking.call(() -> kitchen.execute(id, request.expectedVersion(), KitchenAction.MARK_READY));
     }
 
     @PostMapping("/{id}/complete")
     @Operation(summary = "Завершить выданный заказ")
-    public Mono<ResponseEntity<OrderResponse>> complete(
+    public Mono<OrderResponse> complete(
             @PathVariable UUID id,
             @Valid @RequestBody OrderCommandRequest request) {
-        return blocking.call(() -> ResponseEntity.ok(kitchen.execute(id, request.expectedVersion(), KitchenAction.COMPLETE)));
+        return blocking.call(() -> kitchen.execute(id, request.expectedVersion(), KitchenAction.COMPLETE));
     }
 
 }

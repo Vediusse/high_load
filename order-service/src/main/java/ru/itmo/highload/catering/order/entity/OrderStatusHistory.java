@@ -13,9 +13,14 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "order_status_history")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class OrderStatusHistory {
 
     @Id
@@ -24,6 +29,7 @@ public class OrderStatusHistory {
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "order_id", nullable = false)
+    @Getter(AccessLevel.NONE)
     private CorporateOrder order;
 
     @NotNull
@@ -47,9 +53,6 @@ public class OrderStatusHistory {
     @Column(name = "changed_at", nullable = false)
     private Instant changedAt;
 
-    protected OrderStatusHistory() {
-    }
-
     OrderStatusHistory(
             CorporateOrder order,
             OrderStatus fromStatus,
@@ -69,31 +72,7 @@ public class OrderStatusHistory {
         this.changedAt = changedAt;
     }
 
-    public UUID getId() {
-        return id;
-    }
-
     public UUID getOrderId() {
         return order.getId();
-    }
-
-    public OrderStatus getFromStatus() {
-        return fromStatus;
-    }
-
-    public OrderStatus getToStatus() {
-        return toStatus;
-    }
-
-    public String getReason() {
-        return reason;
-    }
-
-    public UUID getChangedBy() {
-        return changedBy;
-    }
-
-    public Instant getChangedAt() {
-        return changedAt;
     }
 }

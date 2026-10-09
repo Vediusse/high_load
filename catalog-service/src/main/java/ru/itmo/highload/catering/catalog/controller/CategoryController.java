@@ -8,7 +8,9 @@ import java.net.URI;
 import reactor.core.publisher.Mono;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,31 +40,33 @@ public class CategoryController {
     @PostMapping
     @Operation(summary = "Создать категорию")
     @ApiResponse(responseCode = "201", description = "Категория создана")
-    public Mono<ResponseEntity<CategoryResponse>> create(@Valid @RequestBody CreateCategoryRequest request) {
-        return catalogService.createCategory(request).map(response ->
-                ResponseEntity.created(URI.create("/api/v1/categories/" + response.id())).body(response));
+    @ResponseStatus(HttpStatus.CREATED)
+    public Mono<CategoryResponse> create(@Valid @RequestBody CreateCategoryRequest request, ServerHttpResponse httpResponse) {
+        return catalogService.createCategory(request).doOnNext(response ->
+                httpResponse.getHeaders().setLocation(URI.create("/api/v1/categories/" + response.id())));
     }
 
     @GetMapping
     @Operation(summary = "Получить страницу категорий")
-    public Mono<ResponseEntity<PageResponse<CategoryResponse>>> list(
+    public Mono<PageResponse<CategoryResponse>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return catalogService.listCategories(Pagination.pageRequest(page, size)).map(ResponseEntity::ok);
+        return catalogService.listCategories(Pagination.pageRequest(page, size));
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Изменить категорию")
-    public Mono<ResponseEntity<CategoryResponse>> update(
+    public Mono<CategoryResponse> update(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateCategoryRequest request) {
-        return catalogService.updateCategory(id, request).map(ResponseEntity::ok);
+        return catalogService.updateCategory(id, request);
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Удалить неиспользуемую категорию")
     @ApiResponse(responseCode = "204", description = "Категория удалена")
-    public Mono<ResponseEntity<Void>> delete(@PathVariable UUID id) {
-        return catalogService.deleteCategory(id).thenReturn(ResponseEntity.noContent().build());
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> delete(@PathVariable UUID id) {
+        return catalogService.deleteCategory(id);
     }
 }

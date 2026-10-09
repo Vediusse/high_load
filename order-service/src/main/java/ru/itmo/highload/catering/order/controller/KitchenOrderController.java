@@ -2,11 +2,11 @@ package ru.itmo.highload.catering.order.controller;
 
 import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
-import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 import ru.itmo.highload.catering.order.dto.KitchenCommand;
 import ru.itmo.highload.catering.order.dto.OrderResponse;
 import ru.itmo.highload.catering.order.dto.OrderState;
@@ -27,8 +27,8 @@ public class KitchenOrderController {
     private final KitchenCommands commands;
 
     @PostMapping("/states")
-    public Mono<List<OrderState>> states(@Valid @RequestBody OrderStatesRequest request) {
-        return blocking.call(() -> orders.states(request.ids()));
+    public Flux<OrderState> states(@Valid @RequestBody OrderStatesRequest request) {
+        return blocking.call(() -> orders.states(request.ids())).flatMapMany(Flux::fromIterable);
     }
 
     @GetMapping("/kitchen")

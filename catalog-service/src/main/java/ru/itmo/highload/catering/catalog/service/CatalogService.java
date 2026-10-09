@@ -9,12 +9,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.ReactiveTransactionManager;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 import ru.itmo.highload.catering.catalog.dto.*;
 import ru.itmo.highload.catering.catalog.entity.Category;
 import ru.itmo.highload.catering.catalog.entity.Dish;
 import ru.itmo.highload.catering.catalog.repository.CategoryRepository;
 import ru.itmo.highload.catering.catalog.repository.DishRepository;
-import ru.itmo.highload.catering.catalog.repository.DishCategoryRepository;
 import ru.itmo.highload.common.dto.PageResponse;
 import ru.itmo.highload.common.error.ApiException;
 
@@ -22,14 +22,12 @@ import ru.itmo.highload.common.error.ApiException;
 public class CatalogService {
     private final CategoryRepository categories;
     private final DishRepository dishes;
-    private final DishCategoryRepository dishCategories;
     private final TransactionalOperator transaction;
 
     public CatalogService(CategoryRepository categories, DishRepository dishes,
-                          DishCategoryRepository dishCategories, ReactiveTransactionManager manager) {
+                          ReactiveTransactionManager manager) {
         this.categories = categories;
         this.dishes = dishes;
-        this.dishCategories = dishCategories;
         this.transaction = TransactionalOperator.create(manager);
     }
 
@@ -40,7 +38,7 @@ public class CatalogService {
     }
 
     public Mono<PageResponse<CategoryResponse>> listCategories(PageRequest page) {
-        return categories.findPage(page).map(this::response).collectList().map(items -> new PageResponse<>(
+        return categories.findPage(page.getOffset(), page.getPageSize() + 1).map(this::response).collectList().map(items -> new PageResponse<>(
                         items.subList(0, Math.min(items.size(), page.getPageSize())),
                         page.getPageNumber(), page.getPageSize(), items.size() > page.getPageSize()));
     }
@@ -48,7 +46,7 @@ public class CatalogService {
     public Mono<CategoryResponse> updateCategory(UUID id, UpdateCategoryRequest request) {
         return requireCategory(id).flatMap(category -> {
             category.update(request.name());
-            return categories.update(category);
+            return categories.save(category);
         }).map(this::response).as(transaction::transactional)
                 .onErrorMap(DataIntegrityViolationException.class, error -> categoryConflict());
     }
@@ -60,9 +58,9 @@ public class CatalogService {
     }
 
     public Mono<DishResponse> createDish(CreateDishRequest request) {
-        return requireCategories(request.categoryIds()).flatMap(categories -> {
+        return requireCategories(request.categoryIds()).collect(Collectors.toCollection(LinkedHashSet::new)).flatMap(categories -> {
             Dish dish = new Dish(request.name(), request.description(), request.currentPrice(), categories);
-            return dishes.insert(dish).flatMap(saved -> saveCategories(saved).then(response(saved)));
+            return dishes.save(dish).flatMap(saved -> saveCategories(saved).then(response(saved)));
         }).as(transaction::transactional);
     }
 
@@ -71,9 +69,9 @@ public class CatalogService {
     }
 
     public Mono<DishResponse> updateDish(UUID id, UpdateDishRequest request) {
-        return requireDish(id).flatMap(dish -> requireCategories(request.categoryIds()).flatMap(categories -> {
+        return requireDish(id).flatMap(dish -> requireCategories(request.categoryIds()).collect(Collectors.toCollection(LinkedHashSet::new)).flatMap(categories -> {
             dish.update(request.name(), request.description(), request.currentPrice(), categories);
-            return dishes.update(dish).flatMap(saved -> saveCategories(saved).then(response(saved)));
+            return dishes.save(dish).flatMap(saved -> saveCategories(saved).then(response(saved)));
         })).as(transaction::transactional);
     }
 
@@ -81,7 +79,7 @@ public class CatalogService {
         return requireDish(id).flatMap(dish -> {
             if (!dish.isActive()) return Mono.just(dish);
             dish.deactivate();
-            return dishes.update(dish);
+            return dishes.save(dish);
         }).then().as(transaction::transactional);
     }
 
@@ -91,7 +89,11 @@ public class CatalogService {
                 .collectList().flatMap(fetched -> {
                     boolean hasNext = fetched.size() > limit;
                     List<Dish> page = fetched.subList(0, Math.min(limit, fetched.size()));
-                    return dishCategories.findCategoryIdsByDishIds(page.stream().map(Dish::getId).toList()).map(categories -> {
+                    if (page.isEmpty()) return Mono.just(new DishCursorPageResponse(List.of(), null, false));
+                    return dishes.findCategoryLinks(page.stream().map(Dish::getId).toList())
+                            .collect(() -> new HashMap<UUID, Set<UUID>>(), (map, link) ->
+                                    map.computeIfAbsent(link.dishId(), key -> new LinkedHashSet<>()).add(link.categoryId()))
+                            .map(categories -> {
                         List<DishResponse> items = page.stream().map(dish -> response(dish,
                                 categories.getOrDefault(dish.getId(), Set.of()))).toList();
                         return new DishCursorPageResponse(items, hasNext ? page.getLast().getId() : null, hasNext);
@@ -99,34 +101,37 @@ public class CatalogService {
                 });
     }
 
-    public Mono<List<DishSnapshot>> snapshots(Set<UUID> ids) {
-        if (ids.isEmpty()) return Mono.just(List.of());
-        return dishes.findAllById(ids)
-                .collectMap(Dish::getId).map(found -> ids.stream().map(id -> {
-                    Dish dish = found.get(id);
-                    if (dish == null) throw notFound("Блюдо", id);
-                    if (!dish.isActive()) throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
-                            "DISH_INACTIVE", "Нельзя использовать неактивное блюдо " + id + " в новом заказе");
-                    return new DishSnapshot(id, dish.getName(), dish.getCurrentPrice(), dish.isActive());
-                }).toList());
+    public Flux<DishSnapshot> snapshots(Set<UUID> ids) {
+        if (ids.isEmpty()) return Flux.empty();
+        return dishes.findAllById(ids).collectMap(Dish::getId).flatMapMany(found -> {
+            // Validate the entire bounded batch before emitting any response elements.
+            for (UUID id : ids) {
+                Dish dish = found.get(id);
+                if (dish == null) throw notFound("Блюдо", id);
+                if (!dish.isActive()) throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,
+                        "DISH_INACTIVE", "Нельзя использовать неактивное блюдо " + id + " в новом заказе");
+            }
+            return Flux.fromIterable(ids).map(found::get)
+                    .map(dish -> new DishSnapshot(dish.getId(), dish.getName(), dish.getCurrentPrice(), dish.isActive()));
+        });
     }
 
     private Mono<Void> saveCategories(Dish dish) {
-        return dishCategories.replace(dish.getId(), dish.getCategories().stream()
-                .map(Category::getId).collect(Collectors.toSet()));
+        // The enclosing service transaction makes the dish update and link replacement atomic.
+        return dishes.deleteCategoryLinks(dish.getId())
+                .thenMany(Flux.fromIterable(dish.getCategories())
+                        .concatMap(category -> dishes.addCategoryLink(dish.getId(), category.getId())))
+                .then();
     }
 
-    private Mono<Set<Category>> requireCategories(Set<UUID> ids) {
-        if (ids.isEmpty()) return Mono.just(Set.of());
-        return categories.findAllById(ids)
-                .collectMap(Category::getId).map(found -> {
-                    Set<Category> categories = new LinkedHashSet<>();
-                    for (UUID id : ids) {
-                        if (!found.containsKey(id)) throw notFound("Категория", id);
-                        categories.add(found.get(id));
-                    }
-                    return categories;
-                });
+    private Flux<Category> requireCategories(Set<UUID> ids) {
+        if (ids.isEmpty()) return Flux.empty();
+        return categories.findAllById(ids).collectMap(Category::getId).flatMapMany(found -> {
+            for (UUID id : ids) {
+                if (!found.containsKey(id)) throw notFound("Категория", id);
+            }
+            return Flux.fromIterable(ids).map(found::get);
+        });
     }
 
     private Mono<Dish> requireDish(UUID id) {
@@ -140,7 +145,9 @@ public class CatalogService {
     }
 
     private Mono<DishResponse> response(Dish dish) {
-        return dishCategories.findCategoryIdsByDishIds(List.of(dish.getId())).map(ids -> response(dish, ids.getOrDefault(dish.getId(), Set.of())));
+        return dishes.findCategoryLinks(List.of(dish.getId()))
+                .map(link -> link.categoryId()).collect(Collectors.toSet())
+                .map(ids -> response(dish, ids));
     }
 
     private DishResponse response(Dish dish, Set<UUID> categories) {

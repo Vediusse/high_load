@@ -47,16 +47,81 @@ spring:
             readTimeout: 2000
     circuitbreaker:
       resilience4j:
+        # Spring Cloud Circuit Breaker 3.3.3: дефолт false.
+        # Отключаем дополнительный TimeLimiter; время сетевого вызова ограничивает Feign.
         disable-time-limiter: true
+        # Дефолт false. true выполняет вызов без дополнительного executor breaker.
+        # У нас Feign уже вынесен с event loop на scheduler BlockingRequests.
         disable-thread-pool: true
+# Настройки Resilience4j 2.2.0: CLOSED — обычная работа, OPEN — запрет вызовов,
+# HALF_OPEN — ограниченные пробы доступности. Fallback задан в Java: CatalogGateway.getActiveDishPrices.
+# Дефолты ядра: https://github.com/resilience4j/resilience4j/blob/v2.2.0/resilience4j-circuitbreaker/src/main/java/io/github/resilience4j/circuitbreaker/CircuitBreakerConfig.java
+# Spring-параметры: https://github.com/resilience4j/resilience4j/blob/v2.2.0/resilience4j-framework-common/src/main/java/io/github/resilience4j/common/circuitbreaker/configuration/CommonCircuitBreakerConfigurationProperties.java
 resilience4j:
   circuitbreaker:
     instances:
       catalog:
-        slidingWindowSize: 10
-        minimumNumberOfCalls: 5
+        # Тип окна статистики в CLOSED. COUNT_BASED — последние N вызовов;
+        # TIME_BASED — последние N секунд. Дефолт: COUNT_BASED.
+        slidingWindowType: COUNT_BASED
+        # Размер окна: у нас последние 50 учитываемых вызовов. Дефолт: 100.
+        # Это не ограничение числа одновременных запросов.
+        slidingWindowSize: 50
+        # Минимум учитываемых вызовов в CLOSED до расчёта долей ошибок/медленных ответов.
+        # У нас 20; дефолт: 100 (для COUNT_BASED ограничивается размером окна).
+        minimumNumberOfCalls: 20
+        # Процент ошибок, начиная с которого circuit открывается (>= порога). Дефолт: 50%.
+        # В HALF_OPEN тот же порог применяется к завершившейся серии проб.
         failureRateThreshold: 50
-        waitDurationInOpenState: 5s
-        permittedNumberOfCallsInHalfOpenState: 2
+        # Вызов дольше этого времени считается медленным, даже если успешен. Дефолт: 60s.
+        # Это только критерий статистики, не таймаут: запрос прерывают таймауты Feign.
+        slowCallDurationThreshold: 1500ms
+        # Процент медленных вызовов, начиная с которого circuit открывается. Дефолт: 100%.
+        # Достаточно достижения любого порога: ошибок ИЛИ медленных вызовов.
+        slowCallRateThreshold: 50
+        # Пауза OPEN до разрешения проб. Дефолт библиотеки: 60s.
+        # У нас 30s, если CATALOG_CIRCUIT_OPEN_WAIT не задана.
+        # Это пауза перед проверкой, а не гарантия восстановления зависимости.
+        waitDurationInOpenState: ${CATALOG_CIRCUIT_OPEN_WAIT:30s}
+        # Количество пробных вызовов в HALF_OPEN. Дефолт: 10; у нас 5.
+        # Пока пробы не завершены, лишние вызовы отклоняются. По результатам — CLOSED или OPEN.
+        permittedNumberOfCallsInHalfOpenState: 5
+        # Максимум времени в HALF_OPEN: если пробы не завершились, снова OPEN.
+        # Дефолт: 0s — ждать без ограничения. Уже выполняющиеся запросы это не отменяет.
+        maxWaitDurationInHalfOpenState: 15s
+        # Дефолт: false — после паузы OPEN переход в HALF_OPEN запускает следующий запрос.
+        # true включает фоновый переход по таймеру; сетевые пробы всё равно требуют запросов.
+        automaticTransitionFromOpenToHalfOpenEnabled: false
+        # Исключения, не учитываемые ни как ошибки, ни как успехи. Дефолт: пустой список.
+        # Здесь исключаем распознанные бизнес-ошибки; правило действует и на подклассы.
+        # Это исключение из статистики, а не из fallback: он получает ошибку и пробрасывает её.
         ignoreExceptions:
           - ru.itmo.highload.common.error.ApiException
+
+        # Остальные параметры экземпляра не задаём. Ниже фактические дефолты 2.2.0;
+        # это справка в комментариях, а не дополнительные настройки YAML.
+        # recordExceptions: [] — без списка/своего predicate все НЕигнорируемые исключения
+        #   считаются ошибками. Непустой список сужает набор; остальные становятся успехами.
+        # recordFailurePredicate: не задан; стандартный predicate возвращает true.
+        #   Свой класс Predicate<Throwable> позволяет выбирать учитываемые ошибки.
+        # ignoreExceptionPredicate: не задан; стандартный predicate возвращает false.
+        #   Свой predicate дополняет ignoreExceptions; игнорирование приоритетнее записи ошибки.
+        # recordResultPredicate: не задан; стандартный predicate возвращает false — успешный
+        #   результат сам по себе не считается ошибкой. Наши gateway проверяют DTO и бросают
+        #   исключение при некорректном ответе, поэтому такой ответ учитывается как сбой.
+        # writableStackTraceEnabled: true — CallNotPermittedException при отклонении вызова
+        #   содержит stack trace; false уменьшает затраты на создание этого исключения.
+        # eventConsumerBufferSize: 100 — размер буфера диагностических событий на экземпляр;
+        #   это отдельный буфер, не slidingWindowSize для расчёта доли ошибок.
+        # registerHealthIndicator: false — экземпляр не включается в health-индикатор breaker.
+        # allowHealthIndicatorToFail: false — при включённом health-индикаторе OPEN даёт
+        #   CIRCUIT_OPEN, а не DOWN; true разрешает DOWN (важно для общей проверки здоровья).
+        # baseConfig: не задан — именованный шаблон из configs не выбран. Если задан
+        #   configs.default, он наследуется автоматически; в нашем проекте его нет.
+        # enableExponentialBackoff: не задан (выключен) — пауза OPEN не растёт после отказов.
+        # exponentialBackoffMultiplier: не задан; при включении backoff дефолт множителя 1.5.
+        # exponentialMaxWaitDurationInOpenState: не задан — отдельного верхнего предела нет;
+        #   применяется только при включённом backoff и заданном multiplier.
+        # enableRandomizedWait: не задан (выключен) — случайный разброс паузы OPEN отключён.
+        # randomizedWaitFactor: не задан; при включении randomized wait дефолт 0.5 (±50%).
+        #   В этой версии exponential backoff и randomized wait одновременно включать нельзя.

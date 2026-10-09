@@ -8,7 +8,8 @@ import java.util.UUID;
 import reactor.core.publisher.Mono;
 import ru.itmo.highload.common.web.BlockingRequests;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -33,19 +34,20 @@ public class DeliveryPointController {
 
     @PutMapping("/{id}")
     @Operation(summary = "Изменить точку выдачи")
-    public Mono<ResponseEntity<DeliveryPointResponse>> update(
+    public Mono<DeliveryPointResponse> update(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateDeliveryPointRequest request) {
-        return blocking.call(() -> ResponseEntity.ok(organizationService.updateDeliveryPoint(id, request)));
+        return blocking.call(() -> organizationService.updateDeliveryPoint(id, request));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Деактивировать точку выдачи")
     @ApiResponse(responseCode = "204", description = "Точка выдачи деактивирована")
-    public Mono<ResponseEntity<Void>> deactivate(@PathVariable UUID id) {
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> deactivate(@PathVariable UUID id) {
         return blocking.call(() -> {
             organizationService.deactivateDeliveryPoint(id);
-            return ResponseEntity.noContent().build();
+            return null;
         });
     }
 }

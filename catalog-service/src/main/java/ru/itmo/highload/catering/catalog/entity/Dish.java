@@ -13,8 +13,13 @@ import java.util.UUID;
 import org.springframework.data.annotation.Version;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Table;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Table("dish")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Dish {
 
     @Id
@@ -40,9 +45,6 @@ public class Dish {
 
     @org.springframework.data.annotation.Transient
     private Set<Category> categories = new LinkedHashSet<>();
-
-    protected Dish() {
-    }
 
     public Dish(String name, String description, BigDecimal currentPrice, Set<Category> categories) {
         this.id = UUID.randomUUID();
@@ -72,26 +74,6 @@ public class Dish {
 
     public void deactivate() {
         this.active = false;
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public BigDecimal getCurrentPrice() {
-        return currentPrice;
-    }
-
-    public boolean isActive() {
-        return active;
     }
 
     public long getVersion() {

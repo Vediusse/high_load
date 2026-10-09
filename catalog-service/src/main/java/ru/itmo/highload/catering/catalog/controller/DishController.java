@@ -8,7 +8,9 @@ import java.net.URI;
 import reactor.core.publisher.Mono;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,38 +40,40 @@ public class DishController {
     @PostMapping
     @Operation(summary = "Создать блюдо")
     @ApiResponse(responseCode = "201", description = "Блюдо создано")
-    public Mono<ResponseEntity<DishResponse>> create(@Valid @RequestBody CreateDishRequest request) {
-        return catalogService.createDish(request).map(response ->
-                ResponseEntity.created(URI.create("/api/v1/dishes/" + response.id())).body(response));
+    @ResponseStatus(HttpStatus.CREATED)
+    public Mono<DishResponse> create(@Valid @RequestBody CreateDishRequest request, ServerHttpResponse httpResponse) {
+        return catalogService.createDish(request).doOnNext(response ->
+                httpResponse.getHeaders().setLocation(URI.create("/api/v1/dishes/" + response.id())));
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Получить блюдо")
-    public Mono<ResponseEntity<DishResponse>> get(@PathVariable UUID id) {
-        return catalogService.getDish(id).map(ResponseEntity::ok);
+    public Mono<DishResponse> get(@PathVariable UUID id) {
+        return catalogService.getDish(id);
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Изменить блюдо")
-    public Mono<ResponseEntity<DishResponse>> update(
+    public Mono<DishResponse> update(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateDishRequest request) {
-        return catalogService.updateDish(id, request).map(ResponseEntity::ok);
+        return catalogService.updateDish(id, request);
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Деактивировать блюдо")
     @ApiResponse(responseCode = "204", description = "Блюдо деактивировано")
-    public Mono<ResponseEntity<Void>> deactivate(@PathVariable UUID id) {
-        return catalogService.deactivateDish(id).thenReturn(ResponseEntity.noContent().build());
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public Mono<Void> deactivate(@PathVariable UUID id) {
+        return catalogService.deactivateDish(id);
     }
 
     @GetMapping
     @Operation(summary = "Получить активное меню cursor-страницей без total")
-    public Mono<ResponseEntity<DishCursorPageResponse>> list(
+    public Mono<DishCursorPageResponse> list(
             @RequestParam(required = false) UUID afterId,
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(required = false) UUID categoryId) {
-        return catalogService.listActiveDishes(afterId, Pagination.requireLimit(limit), categoryId).map(ResponseEntity::ok);
+        return catalogService.listActiveDishes(afterId, Pagination.requireLimit(limit), categoryId);
     }
 }

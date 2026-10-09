@@ -26,9 +26,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "corporate_order")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CorporateOrder {
 
     @Id
@@ -79,9 +84,6 @@ public class CorporateOrder {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderBy("changedAt ASC, id ASC")
     private List<OrderStatusHistory> history = new ArrayList<>();
-
-    protected CorporateOrder() {
-    }
 
     public CorporateOrder(
             UUID organizationId,
@@ -228,42 +230,6 @@ public class CorporateOrder {
         if (!lines.isEmpty()) {
             throw new NonEmptyOrderDeleteException();
         }
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public UUID getOrganizationId() {
-        return organizationId;
-    }
-
-    public UUID getDeliveryPointId() {
-        return deliveryPointId;
-    }
-
-    public Instant getRequestedDeliveryAt() {
-        return requestedDeliveryAt;
-    }
-
-    public OrderStatus getStatus() {
-        return status;
-    }
-
-    public BigDecimal getTotalAmount() {
-        return totalAmount;
-    }
-
-    public String getComment() {
-        return comment;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public long getVersion() {
-        return version;
     }
 
     public List<OrderLine> getLines() {

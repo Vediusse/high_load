@@ -23,9 +23,21 @@ public interface CorporateOrderRepository extends JpaRepository<CorporateOrder, 
             from CorporateOrder o
             where (:status is null or o.status = :status)
               and (:organizationId is null or o.organizationId = :organizationId)
+              and (:excludeDraft = false or o.status <> 'DRAFT')
             """)
     Page<CorporateOrder> findPage(
             @Param("status") OrderStatus status,
+            @Param("organizationId") UUID organizationId,
+            @Param("excludeDraft") boolean excludeDraft,
+            Pageable pageable);
+
+    @Query("""
+            select o from CorporateOrder o
+            where o.status in :statuses
+              and (:organizationId is null or o.organizationId = :organizationId)
+            """)
+    Page<CorporateOrder> findKitchenPage(
+            @Param("statuses") java.util.Collection<OrderStatus> statuses,
             @Param("organizationId") UUID organizationId,
             Pageable pageable);
 }

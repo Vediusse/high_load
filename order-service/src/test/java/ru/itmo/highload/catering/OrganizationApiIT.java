@@ -54,6 +54,21 @@ class OrganizationApiIT extends AbstractPostgresIT {
     }
 
     @Test
+    void representativeCanReadOnlyOwnOrganizationAndItsDeliveryPoints() throws Exception {
+        UUID own = UUID.fromString(createOrganization("Своя", "+79991234567").get("id").asText());
+        UUID foreign = UUID.fromString(createOrganization("Чужая", "+79991234568").get("id").asText());
+        String representative = ru.itmo.highload.common.security.TestTokens.bearerForOrganization(own);
+
+        client.get().uri("/api/v1/organizations").header("Authorization", representative)
+                .exchange().expectStatus().isOk().expectHeader().valueEquals("X-Total-Count", "1")
+                .expectBody().jsonPath("$.items[0].id").isEqualTo(own.toString());
+        client.get().uri("/api/v1/organizations/" + foreign).header("Authorization", representative)
+                .exchange().expectStatus().isNotFound().expectBody().jsonPath("$.code").isEqualTo("RESOURCE_NOT_FOUND");
+        client.get().uri("/api/v1/organizations/" + foreign + "/delivery-points").header("Authorization", representative)
+                .exchange().expectStatus().isNotFound().expectBody().jsonPath("$.code").isEqualTo("RESOURCE_NOT_FOUND");
+    }
+
+    @Test
     void organizationAndDeliveryPointCrudUsesDtosAndPagination() throws Exception {
         JsonNode organization = createOrganization("Альфа", "+79991234567");
         UUID organizationId = UUID.fromString(organization.get("id").asText());

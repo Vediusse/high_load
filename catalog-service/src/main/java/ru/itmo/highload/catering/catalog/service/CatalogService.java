@@ -8,14 +8,21 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.ReactiveTransactionManager;
 import org.springframework.transaction.reactive.TransactionalOperator;
-import reactor.core.publisher.Mono;
 import reactor.core.publisher.Flux;
-import ru.itmo.highload.catering.catalog.dto.*;
+import reactor.core.publisher.Mono;
+import ru.itmo.highload.catering.catalog.dto.in.CreateCategoryRequest;
+import ru.itmo.highload.catering.catalog.dto.in.CreateDishRequest;
+import ru.itmo.highload.catering.catalog.dto.in.UpdateCategoryRequest;
+import ru.itmo.highload.catering.catalog.dto.in.UpdateDishRequest;
+import ru.itmo.highload.catering.catalog.dto.out.CategoryResponse;
+import ru.itmo.highload.catering.catalog.dto.out.DishCursorPageResponse;
+import ru.itmo.highload.catering.catalog.dto.out.DishResponse;
+import ru.itmo.highload.catering.catalog.dto.out.DishSnapshot;
 import ru.itmo.highload.catering.catalog.entity.Category;
 import ru.itmo.highload.catering.catalog.entity.Dish;
 import ru.itmo.highload.catering.catalog.repository.CategoryRepository;
 import ru.itmo.highload.catering.catalog.repository.DishRepository;
-import ru.itmo.highload.common.dto.PageResponse;
+import ru.itmo.highload.common.dto.out.PageResponse;
 import ru.itmo.highload.common.error.ApiException;
 
 @Service

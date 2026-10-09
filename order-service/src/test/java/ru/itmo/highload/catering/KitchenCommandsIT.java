@@ -11,7 +11,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import ru.itmo.highload.catering.order.dto.*;
+import ru.itmo.highload.catering.order.dto.in.CreateOrderRequest;
+import ru.itmo.highload.catering.order.dto.in.KitchenAction;
+import ru.itmo.highload.catering.order.dto.in.KitchenCommand;
+import ru.itmo.highload.catering.order.dto.in.OrderLineInput;
+import ru.itmo.highload.catering.order.dto.in.ReplaceOrderLinesRequest;
+import ru.itmo.highload.catering.order.dto.out.OrderResponse;
 import ru.itmo.highload.catering.order.entity.OrderStatus;
 import ru.itmo.highload.catering.order.service.*;
 import ru.itmo.highload.catering.organization.entity.*;
@@ -146,8 +151,8 @@ class KitchenCommandsIT extends AbstractPostgresIT {
         var point = points.saveAndFlush(new DeliveryPoint(org,"Офис","Адрес","Иван","+79991234567"));
         var dish = catalog.dish("Суп", "180.00");
         var draft = orders.createDraft(new CreateOrderRequest(org.getId(),point.getId(),OffsetDateTime.now().plusDays(2),null));
-        var lines = orders.replaceDraftLines(draft.id(),new ReplaceOrderLinesRequest(draft.version(),List.of(new OrderLineInput(dish.getId(),2))));
-        var submitted = orders.submit(draft.id(),lines.version());
+        var lines = orders.replaceDraftLines(draft.id(),new ReplaceOrderLinesRequest(draft.version(),List.of(new OrderLineInput(dish.getId(),2))),ru.itmo.highload.common.security.TestTokens.bearer());
+        var submitted = orders.submit(draft.id(),lines.version(),ru.itmo.highload.common.security.TestTokens.bearer());
         return orders.confirm(draft.id(),submitted.version());
     }
 }

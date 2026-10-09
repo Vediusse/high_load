@@ -68,6 +68,7 @@ services:
       dockerfile: catalog-service/Dockerfile
     environment:
       <<: *environment
+      INTERNAL_JWT_PUBLIC_KEY_BASE64: ${INTERNAL_JWT_PUBLIC_KEY_BASE64:?Set internal JWT public key}
       CATALOG_DB_USER: ${CATALOG_DB_USER:-catalog}
       CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD:?Set CATALOG_DB_PASSWORD in .env}
     depends_on:
@@ -82,6 +83,7 @@ services:
       dockerfile: order-service/Dockerfile
     environment:
       <<: *environment
+      INTERNAL_JWT_PUBLIC_KEY_BASE64: ${INTERNAL_JWT_PUBLIC_KEY_BASE64:?Set internal JWT public key}
       ORDER_DB_URL: jdbc:postgresql://order-postgres:5432/${ORDER_DB_NAME:-orders}
       ORDER_DB_USER: ${ORDER_DB_USER:-orders}
       ORDER_DB_PASSWORD: ${ORDER_DB_PASSWORD:?Set ORDER_DB_PASSWORD in .env}
@@ -111,10 +113,47 @@ services:
       dockerfile: kitchen-service/Dockerfile
     environment:
       <<: *environment
+      INTERNAL_JWT_PUBLIC_KEY_BASE64: ${INTERNAL_JWT_PUBLIC_KEY_BASE64:?Set internal JWT public key}
       KITCHEN_DB_USER: ${KITCHEN_DB_USER:-production}
       KITCHEN_DB_PASSWORD: ${KITCHEN_DB_PASSWORD:?Set KITCHEN_DB_PASSWORD in .env}
     depends_on:
       kitchen-postgres:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+  identity-postgres:
+    image: postgres:17.11-alpine3.24
+    environment:
+      POSTGRES_DB: identity
+      POSTGRES_USER: ${IDENTITY_DB_USER:-identity}
+      POSTGRES_PASSWORD: ${IDENTITY_DB_PASSWORD:?Set IDENTITY_DB_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    volumes:
+      - identity-postgres-data:/var/lib/postgresql/data
+  identity-service:
+    <<: *app
+    build:
+      context: .
+      dockerfile: identity-service/Dockerfile
+    environment:
+      <<: *environment
+      INTERNAL_JWT_PUBLIC_KEY_BASE64: ${INTERNAL_JWT_PUBLIC_KEY_BASE64:?Set internal JWT public key}
+      IDENTITY_DB_USER: ${IDENTITY_DB_USER:-identity}
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:?Set IDENTITY_DB_PASSWORD in .env}
+      INTERNAL_JWT_PRIVATE_KEY_BASE64: ${INTERNAL_JWT_PRIVATE_KEY_BASE64:?Set internal JWT private key}
+      GATEWAY_EXCHANGE_SECRET: ${GATEWAY_EXCHANGE_SECRET:?Set Gateway exchange credential}
+      JWT_SECRET_BASE64: ${JWT_SECRET_BASE64:?Set JWT_SECRET_BASE64 in .env}
+      JWT_ISSUER: ${JWT_ISSUER:-corporate-catering-identity}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_CLOCK_SKEW: ${JWT_CLOCK_SKEW:-30s}
+      IDENTITY_BOOTSTRAP_LOGIN: ${IDENTITY_BOOTSTRAP_LOGIN:-}
+      IDENTITY_BOOTSTRAP_PASSWORD: ${IDENTITY_BOOTSTRAP_PASSWORD:-}
+    depends_on:
+      identity-postgres:
         condition: service_healthy
       discovery-service:
         condition: service_healthy
@@ -123,6 +162,10 @@ services:
     build:
       context: .
       dockerfile: gateway-service/Dockerfile
+    environment:
+      <<: *environment
+      INTERNAL_JWT_PUBLIC_KEY_BASE64: ${INTERNAL_JWT_PUBLIC_KEY_BASE64:?Set internal JWT public key}
+      GATEWAY_EXCHANGE_SECRET: ${GATEWAY_EXCHANGE_SECRET:?Set Gateway exchange credential}
     depends_on:
       order-service:
         condition: service_healthy
@@ -130,9 +173,12 @@ services:
         condition: service_healthy
       kitchen-service:
         condition: service_healthy
+      identity-service:
+        condition: service_healthy
     ports:
       - "${HTTP_PORT:-8080}:8080"
 volumes:
   catalog-postgres-data:
   order-postgres-data:
   production-postgres-data:
+  identity-postgres-data:

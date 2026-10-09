@@ -19,19 +19,19 @@ import org.springframework.http.HttpStatus;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.itmo.highload.catering.catalog.dto.ActiveDishData;
+import ru.itmo.highload.catering.catalog.dto.out.ActiveDishData;
 import ru.itmo.highload.catering.catalog.service.CatalogGateway;
-import ru.itmo.highload.catering.order.dto.CancelOrderRequest;
-import ru.itmo.highload.catering.order.dto.CreateOrderRequest;
-import ru.itmo.highload.catering.order.dto.OrderLineInput;
-import ru.itmo.highload.catering.order.dto.OrderLineResponse;
-import ru.itmo.highload.catering.order.dto.OrderPageResult;
-import ru.itmo.highload.catering.order.dto.OrderResponse;
-import ru.itmo.highload.catering.order.dto.OrderState;
-import ru.itmo.highload.catering.order.dto.OrderStatusHistoryResponse;
-import ru.itmo.highload.catering.order.dto.RejectOrderRequest;
-import ru.itmo.highload.catering.order.dto.ReplaceOrderLinesRequest;
-import ru.itmo.highload.catering.order.dto.UpdateOrderDetailsRequest;
+import ru.itmo.highload.catering.order.dto.in.CancelOrderRequest;
+import ru.itmo.highload.catering.order.dto.in.CreateOrderRequest;
+import ru.itmo.highload.catering.order.dto.in.OrderLineInput;
+import ru.itmo.highload.catering.order.dto.in.RejectOrderRequest;
+import ru.itmo.highload.catering.order.dto.in.ReplaceOrderLinesRequest;
+import ru.itmo.highload.catering.order.dto.in.UpdateOrderDetailsRequest;
+import ru.itmo.highload.catering.order.dto.out.OrderLineResponse;
+import ru.itmo.highload.catering.order.dto.out.OrderPageResult;
+import ru.itmo.highload.catering.order.dto.out.OrderResponse;
+import ru.itmo.highload.catering.order.dto.out.OrderState;
+import ru.itmo.highload.catering.order.dto.out.OrderStatusHistoryResponse;
 import ru.itmo.highload.catering.order.entity.CorporateOrder;
 import ru.itmo.highload.catering.order.entity.OrderLine;
 import ru.itmo.highload.catering.order.entity.OrderStatus;
@@ -39,7 +39,7 @@ import ru.itmo.highload.catering.order.entity.OrderStatusHistory;
 import ru.itmo.highload.catering.order.repository.CorporateOrderRepository;
 import ru.itmo.highload.catering.order.repository.OrderStatusHistoryRepository;
 import ru.itmo.highload.catering.organization.service.OrganizationService;
-import ru.itmo.highload.common.dto.PageResponse;
+import ru.itmo.highload.common.dto.out.PageResponse;
 import ru.itmo.highload.common.error.ApiException;
 
 @Service
@@ -55,11 +55,17 @@ public class OrderService {
 
     @Transactional
     public OrderResponse createDraft(CreateOrderRequest request) {
+        return createDraft(request, null);
+    }
+
+    @Transactional
+    public OrderResponse createDraft(CreateOrderRequest request, OrderAccess access) {
+        UUID organizationId = organizationForCreate(request.organizationId(), access);
         organizationService.requireActiveOrganizationAndPoint(
-                request.organizationId(),
+                organizationId,
                 request.deliveryPointId());
         CorporateOrder order = new CorporateOrder(
-                request.organizationId(),
+                organizationId,
                 request.deliveryPointId(),
                 request.requestedDeliveryAt().toInstant(),
                 request.comment(),
@@ -68,14 +74,23 @@ public class OrderService {
     }
 
     public OrderResponse getOrder(UUID id) {
-        return toResponse(requireOrder(id));
+        return getOrder(id, null);
+    }
+
+    public OrderResponse getOrder(UUID id, OrderAccess access) {
+        return toResponse(requireOrder(id, access));
     }
 
     public List<OrderState> states(Set<UUID> ids) {
+        return states(ids, null);
+    }
+
+    public List<OrderState> states(Set<UUID> ids, OrderAccess access) {
         var found = orderRepository.findAllById(ids);
         if (found.size() != ids.size()) {
             throw new ApiException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Один из заказов не найден");
         }
+        found.forEach(order -> requireVisible(order, access));
         return found.stream().map(order -> new OrderState(
                 order.getId(), order.getStatus(), order.getVersion())).toList();
     }
@@ -85,14 +100,25 @@ public class OrderService {
             int size,
             OrderStatus status,
             UUID organizationId) {
-        if (organizationId != null) {
-            organizationService.getOrganization(organizationId);
+        return listOrders(page, size, status, organizationId, null);
+    }
+
+    public OrderPageResult listOrders(
+            int page,
+            int size,
+            OrderStatus status,
+            UUID organizationId,
+            OrderAccess access) {
+        UUID effectiveOrganizationId = organizationForFilter(organizationId, access);
+        if (effectiveOrganizationId != null) {
+            organizationService.getOrganization(effectiveOrganizationId);
         }
         PageRequest pageRequest = PageRequest.of(
                 page,
                 size,
                 Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
-        Page<CorporateOrder> orders = orderRepository.findPage(status, organizationId, pageRequest);
+        Page<CorporateOrder> orders = orderRepository.findPage(
+                status, effectiveOrganizationId, access != null && access.hidesDraftOrders(), pageRequest);
         PageResponse<OrderResponse> body = new PageResponse<>(
                 orders.getContent().stream().map(this::toResponse).toList(),
                 orders.getNumber(),
@@ -102,8 +128,13 @@ public class OrderService {
     }
 
     public PageResponse<OrderResponse> kitchenQueue(PageRequest request) {
-        Page<CorporateOrder> page = orderRepository.findByStatusIn(
+        return kitchenQueue(request, null);
+    }
+
+    public PageResponse<OrderResponse> kitchenQueue(PageRequest request, OrderAccess access) {
+        Page<CorporateOrder> page = orderRepository.findKitchenPage(
                 Set.of(OrderStatus.CONFIRMED, OrderStatus.IN_COOKING, OrderStatus.READY),
+                access != null && access.restrictsToOrganization() ? access.organizationId() : null,
                 request.withSort(Sort.by("id")));
         return new PageResponse<>(page.getContent().stream().map(this::toResponse).toList(),
                 page.getNumber(), page.getSize(), page.hasNext());
@@ -111,7 +142,12 @@ public class OrderService {
 
     @Transactional
     public OrderResponse updateDraftDetails(UUID id, UpdateOrderDetailsRequest request) {
-        CorporateOrder order = requireOrder(id);
+        return updateDraftDetails(id, request, null);
+    }
+
+    @Transactional
+    public OrderResponse updateDraftDetails(UUID id, UpdateOrderDetailsRequest request, OrderAccess access) {
+        CorporateOrder order = requireOrder(id, access);
         requireExpectedVersion(order, request.expectedVersion());
         requireDraftStatus(order, "Детали заказа можно менять только в статусе DRAFT");
         organizationService.requireActiveOrganizationAndPoint(
@@ -125,8 +161,13 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderResponse replaceDraftLines(UUID id, ReplaceOrderLinesRequest request) {
-        CorporateOrder order = requireOrder(id);
+    public OrderResponse replaceDraftLines(UUID id, ReplaceOrderLinesRequest request, String bearer) {
+        return replaceDraftLines(id, request, bearer, null);
+    }
+
+    @Transactional
+    public OrderResponse replaceDraftLines(UUID id, ReplaceOrderLinesRequest request, String bearer, OrderAccess access) {
+        CorporateOrder order = requireOrder(id, access);
         requireExpectedVersion(order, request.expectedVersion());
         requireDraftStatus(order, "Состав заказа можно менять только в статусе DRAFT");
         ensureNoDuplicateDishes(request.lines());
@@ -134,7 +175,7 @@ public class OrderService {
         Set<UUID> dishIds = request.lines().stream()
                 .map(OrderLineInput::dishId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-        Map<UUID, ActiveDishData> activeDishes = catalogGateway.getActiveDishPrices(dishIds);
+        Map<UUID, ActiveDishData> activeDishes = catalogGateway.getActiveDishPrices(dishIds, bearer);
         List<CorporateOrder.DraftLine> replacements = request.lines().stream()
                 .map(line -> {
                     ActiveDishData dish = activeDishes.get(line.dishId());
@@ -147,7 +188,12 @@ public class OrderService {
 
     @Transactional
     public void deleteEmptyDraft(UUID id) {
-        CorporateOrder order = requireOrder(id);
+        deleteEmptyDraft(id, null);
+    }
+
+    @Transactional
+    public void deleteEmptyDraft(UUID id, OrderAccess access) {
+        CorporateOrder order = requireOrder(id, access);
         try {
             order.requireDeletable();
             orderRepository.delete(order);
@@ -163,8 +209,13 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderResponse submit(UUID id, long expectedVersion) {
-        CorporateOrder order = requireOrder(id);
+    public OrderResponse submit(UUID id, long expectedVersion, String bearer) {
+        return submit(id, expectedVersion, bearer, null);
+    }
+
+    @Transactional
+    public OrderResponse submit(UUID id, long expectedVersion, String bearer, OrderAccess access) {
+        CorporateOrder order = requireOrder(id, access);
         requireExpectedVersion(order, expectedVersion);
         try {
             organizationService.requireActiveOrganizationAndPoint(
@@ -173,14 +224,14 @@ public class OrderService {
             Set<UUID> dishIds = order.getLines().stream()
                     .map(OrderLine::getDishId)
                     .collect(Collectors.toCollection(LinkedHashSet::new));
-            Map<UUID, ActiveDishData> activeDishes = catalogGateway.getActiveDishPrices(dishIds);
+            Map<UUID, ActiveDishData> activeDishes = catalogGateway.getActiveDishPrices(dishIds, bearer);
             Map<UUID, CorporateOrder.DishSnapshot> snapshots = activeDishes.values().stream()
                     .collect(Collectors.toMap(
                             ActiveDishData::id,
                             dish -> new CorporateOrder.DishSnapshot(dish.name(), dish.currentPrice()),
                             (left, right) -> left,
                             LinkedHashMap::new));
-            order.submit(snapshots, clock.instant());
+            order.submit(snapshots, clock.instant(), changedBy(access));
             return flushAndMap(order);
         } catch (CorporateOrder.EmptyOrderException exception) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "ORDER_EMPTY", exception.getMessage());
@@ -196,44 +247,78 @@ public class OrderService {
 
     @Transactional
     public OrderResponse confirm(UUID id, long expectedVersion) {
-        return executeStatusCommand(id, expectedVersion, order -> order.confirm(clock.instant()));
+        return confirm(id, expectedVersion, null);
+    }
+
+    @Transactional
+    public OrderResponse confirm(UUID id, long expectedVersion, OrderAccess access) {
+        return executeStatusCommand(id, expectedVersion, access, order -> order.confirm(clock.instant(), changedBy(access)));
     }
 
     @Transactional
     public OrderResponse reject(UUID id, RejectOrderRequest request) {
+        return reject(id, request, null);
+    }
+
+    @Transactional
+    public OrderResponse reject(UUID id, RejectOrderRequest request, OrderAccess access) {
         return executeStatusCommand(
                 id,
                 request.expectedVersion(),
-                order -> order.reject(request.reason(), clock.instant()));
+                access,
+                order -> order.reject(request.reason(), clock.instant(), changedBy(access)));
     }
 
     @Transactional
     public OrderResponse cancel(UUID id, CancelOrderRequest request) {
+        return cancel(id, request, null);
+    }
+
+    @Transactional
+    public OrderResponse cancel(UUID id, CancelOrderRequest request, OrderAccess access) {
         return executeStatusCommand(
                 id,
                 request.expectedVersion(),
-                order -> order.cancel(request.reason(), clock.instant()));
+                access,
+                order -> order.cancel(request.reason(), clock.instant(), changedBy(access)));
     }
 
     @Transactional
     public OrderResponse startCooking(UUID id, long expectedVersion) {
-        return executeStatusCommand(id, expectedVersion, order -> order.startCooking(clock.instant()));
+        return startCooking(id, expectedVersion, null);
+    }
+
+    @Transactional
+    public OrderResponse startCooking(UUID id, long expectedVersion, OrderAccess access) {
+        return executeStatusCommand(id, expectedVersion, access, order -> order.startCooking(clock.instant(), changedBy(access)));
     }
 
     @Transactional
     public OrderResponse markReady(UUID id, long expectedVersion) {
-        return executeStatusCommand(id, expectedVersion, order -> order.markReady(clock.instant()));
+        return markReady(id, expectedVersion, null);
+    }
+
+    @Transactional
+    public OrderResponse markReady(UUID id, long expectedVersion, OrderAccess access) {
+        return executeStatusCommand(id, expectedVersion, access, order -> order.markReady(clock.instant(), changedBy(access)));
     }
 
     @Transactional
     public OrderResponse complete(UUID id, long expectedVersion) {
-        return executeStatusCommand(id, expectedVersion, order -> order.complete(clock.instant()));
+        return complete(id, expectedVersion, null);
+    }
+
+    @Transactional
+    public OrderResponse complete(UUID id, long expectedVersion, OrderAccess access) {
+        return executeStatusCommand(id, expectedVersion, access, order -> order.complete(clock.instant(), changedBy(access)));
     }
 
     public PageResponse<OrderStatusHistoryResponse> getHistory(UUID id, PageRequest pageRequest) {
-        if (!orderRepository.existsById(id)) {
-            throw orderNotFound(id);
-        }
+        return getHistory(id, pageRequest, null);
+    }
+
+    public PageResponse<OrderStatusHistoryResponse> getHistory(UUID id, PageRequest pageRequest, OrderAccess access) {
+        requireOrder(id, access);
         Page<OrderStatusHistory> history = historyRepository.findByOrder_Id(
                 id,
                 pageRequest.withSort(Sort.by(Sort.Order.asc("changedAt"), Sort.Order.asc("id"))));
@@ -245,15 +330,56 @@ public class OrderService {
     }
 
     private CorporateOrder requireOrder(UUID id) {
-        return orderRepository.findDetailedById(id)
+        return requireOrder(id, null);
+    }
+
+    private CorporateOrder requireOrder(UUID id, OrderAccess access) {
+        CorporateOrder order = orderRepository.findDetailedById(id)
                 .orElseThrow(() -> orderNotFound(id));
+        requireVisible(order, access);
+        return order;
+    }
+
+    private void requireVisible(CorporateOrder order, OrderAccess access) {
+        if (access != null && ((access.restrictsToOrganization() && !access.organizationId().equals(order.getOrganizationId()))
+                || (access.hidesDraftOrders() && order.getStatus() == OrderStatus.DRAFT))) {
+            throw orderNotFound(order.getId());
+        }
+    }
+
+    private UUID organizationForCreate(UUID requestedOrganizationId, OrderAccess access) {
+        if (access != null && access.restrictsToOrganization()) {
+            if (requestedOrganizationId != null && !access.organizationId().equals(requestedOrganizationId)) {
+                throw orderNotFound(requestedOrganizationId);
+            }
+            return access.organizationId();
+        }
+        if (requestedOrganizationId == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Организация обязательна");
+        }
+        return requestedOrganizationId;
+    }
+
+    private UUID organizationForFilter(UUID requestedOrganizationId, OrderAccess access) {
+        if (access != null && access.restrictsToOrganization()) {
+            if (requestedOrganizationId != null && !access.organizationId().equals(requestedOrganizationId)) {
+                throw orderNotFound(requestedOrganizationId);
+            }
+            return access.organizationId();
+        }
+        return requestedOrganizationId;
+    }
+
+    private UUID changedBy(OrderAccess access) {
+        return access == null ? null : access.userId();
     }
 
     private OrderResponse executeStatusCommand(
             UUID id,
             long expectedVersion,
+            OrderAccess access,
             Consumer<CorporateOrder> command) {
-        CorporateOrder order = requireOrder(id);
+        CorporateOrder order = requireOrder(id, access);
         requireExpectedVersion(order, expectedVersion);
         try {
             command.accept(order);

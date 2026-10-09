@@ -13,8 +13,15 @@ import org.springframework.context.annotation.Bean;
 public class CommonOpenApiAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(name = "traceIdHeaderCustomizer")
-    OpenApiCustomizer traceIdHeaderCustomizer() {
-        return openApi -> openApi.getPaths().forEach((path, pathItem) -> {
+    OpenApiCustomizer traceIdHeaderCustomizer(@org.springframework.beans.factory.annotation.Value("${catering.security.internal.enabled:false}") boolean securityEnabled) {
+        return openApi -> {
+            if (securityEnabled) {
+                if (openApi.getComponents() == null) openApi.setComponents(new io.swagger.v3.oas.models.Components());
+                openApi.getComponents().addSecuritySchemes("bearerAuth", new io.swagger.v3.oas.models.security.SecurityScheme()
+                        .type(io.swagger.v3.oas.models.security.SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT"));
+                openApi.setSecurity(java.util.List.of(new io.swagger.v3.oas.models.security.SecurityRequirement().addList("bearerAuth")));
+            }
+            openApi.getPaths().forEach((path, pathItem) -> {
             if (!path.startsWith("/api/v1/")) {
                 return;
             }
@@ -27,5 +34,6 @@ public class CommonOpenApiAutoConfiguration {
                             .maxLength(64)
                             .pattern("[A-Za-z0-9._-]{1,64}"))));
         });
+        };
     }
 }

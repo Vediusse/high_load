@@ -17,6 +17,7 @@ class CatalogFixture {
     volatile long delayMillis;
     volatile boolean incomplete;
     volatile String lastTrace;
+    volatile String lastBearer;
     final AtomicInteger requests = new AtomicInteger();
     final List<Integer> batchSizes = new java.util.concurrent.CopyOnWriteArrayList<>();
     CatalogFixture() {
@@ -27,11 +28,17 @@ class CatalogFixture {
             }));
             server.createContext("/internal/v1/dishes/snapshots", exchange -> {
                 requests.incrementAndGet();
+                lastBearer = exchange.getRequestHeaders().getFirst("Authorization");
                 lastTrace = exchange.getRequestHeaders().getFirst("X-Trace-Id");
                 var ids = mapper.readTree(exchange.getRequestBody()).get("ids");
                 batchSizes.add(ids.size());
                 int status = failureStatus == 0 ? 200 : failureStatus;
-                Object body = Map.of("code", "INTERNAL_ERROR", "message", "unavailable", "fieldErrors", List.of(), "traceId", "fixture");
+                String code = switch (status) {
+                    case 401 -> "AUTHENTICATION_REQUIRED";
+                    case 403 -> "ACCESS_DENIED";
+                    default -> "INTERNAL_ERROR";
+                };
+                Object body = Map.of("code", code, "message", "unavailable", "fieldErrors", List.of(), "traceId", "fixture");
                 List<Map<String, Object>> snapshots = new ArrayList<>();
                 if (failureStatus == 0) {
                     for (var value : ids) {

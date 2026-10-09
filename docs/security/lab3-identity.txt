@@ -1,0 +1,115 @@
+L3.2 — Identity Service
+
+Реализовано в identity-service; контракт — lab3-contract.txt.
+WebFlux контроллеры, JPA на identity-blocking scheduler, собственная PostgreSQL,
+Flyway V1 с app_user/role/user_role. Простой user_role без бизнес-полей отображён
+через JPA ManyToMany; отдельная обёртка-entity для него не требуется.
+Ответы — DTO. Списки с пагинацией сохраняют PageResponse. Entity используют
+Lombok Getter/NoArgsConstructor и явные бизнес-методы без Data/public setters.
+Структура пакетов совпадает с другими бизнес-сервисами: приложение и config
+в ru.itmo.highload.catering, функциональные пакеты — catering.identity.
+JWT выпускает JwtTokenService, ошибки БД обрабатывает IdentityExceptionHandler.
+Конфликт login определяется по имени ограничения Hibernate, не по тексту SQL.
+
+API через Gateway:
+  POST /api/v1/auth/login
+  POST /api/v1/users
+  GET /api/v1/users/{id}
+  GET /api/v1/users?page=0&size=20
+  PUT /api/v1/users/{id}/roles
+  POST /api/v1/users/{id}/block
+  GET /api/v1/me
+
+Login анонимен; users требует SUPERVISOR; me доступен активному пользователю.
+HS256 JWT проверяется Resource Server. BCrypt strength=12. Проверка текущего
+пользователя сверяет ACTIVE/version/roles/organizationId с Identity DB.
+Изменение ролей или блокировка отзывает уже выданные токены.
+Проверка в фильтре работает до контроллера и сохраняет ApiError/X-Trace-Id.
+Security context и request cache не создают HTTP-сессию: каждый запрос
+аутентифицируется по Bearer. Только отказы БД/транзакций/scheduler при проверке
+пользователя переводятся в 503; неожиданные ошибки не маскируются под отказ БД.
+Старый внутренний endpoint `GET /internal/v1/auth/validate` удалён: Gateway и
+сервисы его не использовали. Собственные обращения Identity не делают HTTP-петлю.
+
+Организация проверяется Feign-вызовом существующего Order API, с JWT и trace.
+Сетевой вызов, проверка DTO, Circuit Breaker и fallback изолированы в
+OrganizationGateway по образцу CatalogGateway/OrderGateway. Используется тот же
+Resilience4j: окно 50, минимум 20, пороги 50%, OPEN 30s, пять HALF_OPEN проб.
+Дополнительные TimeLimiter и executor отключены: Feign уже работает на
+BlockingRequests с connect/read timeout 1s/2s. Параметры и дефолты описаны
+в config-repo/identity-service.yml. Fallback возвращает 503 без фиктивных данных;
+распознанные 401/403/404 с ApiError сохраняются и не портят статистику breaker.
+Пустое/некорректное тело, отсутствие active и HTML вместо ApiError дают 503.
+Это явно временный маршрут L3.2; перед закрытием Order в L3.3 он меняется
+на контракт /internal/v1/organizations/{id}. Чужую БД Identity не читает.
+Организация не найдена/неактивна/недоступна — 404/422/503 без записи пользователя.
+
+Bootstrap supervisor выполняется только на пустой Identity DB. PostgreSQL
+transaction advisory lock исключает двойное создание при запуске реплик.
+Bootstrap имеет отдельный timeout 30s из-за BCrypt на холодном старте;
+обычный deadline транзакций Identity — 5s.
+Повторный запуск не меняет пароль/роли и не снимает блокировку. Пароль отсутствует
+в миграциях. До первого старта заполнить IDENTITY_BOOTSTRAP_LOGIN/PASSWORD,
+после него удалить эти значения из .env. БД и пользователей это не удаляет.
+На пустой БД без bootstrap credentials приложение завершает запуск с ошибкой.
+
+Запуск:
+  Скопировать/дополнить .env по .env.example: четыре DB_PASSWORD,
+  JWT_SECRET_BASE64 (openssl rand -base64 32), bootstrap login/password.
+  JWT_ISSUER=corporate-catering-identity, JWT_ACCESS_TTL=15m, JWT_CLOCK_SKEW=30s.
+  docker compose up --build -d --wait
+
+JWT_SECRET_BASE64 и bootstrap передаются непосредственно Identity контейнеру,
+а не Config Server. Все Dockerfile знают новый Maven module.
+Добавлены Identity API/docs маршруты Gateway, Swagger URL /v3/api-docs/identity
+требует Bearer; в общем Swagger указан отдельный раздел пользователей.
+Предыдущие Catalog/Order/Kitchen API пока остаются без аутентификации:
+закрытие всей системы относится к следующим точкам L3.3–L3.5. Это не готовность
+всей лабораторной 3. Config/Eureka и прежние circuit breakers сохраняются.
+
+Проверки:
+  JAVA_HOME="$(/usr/libexec/java_home -v 21)" ./mvnw -B -ntp clean verify
+  python3 scripts/lab3-identity.py http://localhost:8080
+  Для smoke в окружении процесса нужны IDENTITY_BOOTSTRAP_LOGIN/PASSWORD
+  с действующими данными тестового supervisor. Скрипт не печатает токены.
+  Он создаёт тестовых пользователей и организацию; запускать на тестовом стенде.
+  scripts/lab1-defense.sh и lab2-api-contract.py проверяют прежний бизнес-API.
+
+Security тесты используют реальные подписанные токены и настоящую PostgreSQL
+Testcontainers; test profile не отключает security. Дополнительно проверяются
+повреждённые claims, конкурентное создание/ bootstrap, восстановление роли
+представителя, ошибки проверки организации и отказ БД при аутентификации.
+
+Первичная приёмка 2026-10-09 (до аудита стиля):
+  Полный clean verify: 117 тестов, без ошибок и пропусков.
+  Identity: 17 API/DB тестов и 2 unit-теста; порог JaCoCo 70% выполнен.
+  Compose: 11 healthy контейнеров, наружу опубликован только Gateway.
+  lab3-identity.py: login, права supervisor, привязка организации, пагинация,
+  смена ролей/блокировка и отзыв JWT, закрытые внутренние маршруты, миграции.
+  Регрессия: lab2-infrastructure.sh и полный сценарий lab1-defense.sh прошли;
+  Postman, две итерации: 130 запросов, 288 успешных проверок.
+  Перезапуск Identity сохранил пользователей, хэши, блокировки и версии токенов.
+
+Это приёмка среза L3.2; защищённый бизнес-сценарий всей лабораторной 3 ещё
+не реализован. Его проверки добавляются при закрытии бизнес-API.
+
+Последующий аудит стиля/архитектуры: lab3-identity-review.txt.
+Полный clean verify после исправлений: 123 теста, без ошибок и пропусков;
+Identity: 22 API/DB теста и 3 unit-теста. Финальная проверка после переноса
+DTO mapping пройдена отдельно для common + Identity: 36 тестов без ошибок,
+покрытие строк Identity 96,58%.
+На Compose проверен реальный отказ Order: 30 ответов 503 без частичной записи,
+восстановление и пять успешных запросов. Postman: 130 запросов/288 проверок.
+
+Разделение контроллеров и DTO: lab3-dto-layout.txt. AuthenticationController
+содержит только публичный login, IdentityController — защищённые /users и /me,
+InternalAuthController — внутренний validate. Общие пути заданы на классах.
+DTO находятся в in/out; Jwt principal сохранён как стандартный Resource Server
+механизм с обязательной проверкой текущего состояния пользователя в БД.
+
+Изменение механизма 2026-10-09:
+Identity выпускает также внутренний RS256 JWT через защищённый обмен Gateway.
+Сервисы больше не планируют validate на каждом входе. Привязка проверяется
+через защищённый внутренний lookup Order. Текущая семантика блокировки и
+ключи описаны в lab3-request-auth.txt и разделах 4-5 lab3-contract.txt.
+Числа проверок выше относятся к историческому L3.2, не к этому запуску.

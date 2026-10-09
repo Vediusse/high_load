@@ -147,6 +147,10 @@ public class CorporateOrder {
     }
 
     public void submit(Map<UUID, DishSnapshot> snapshots, Instant submittedAt) {
+        submit(snapshots, submittedAt, null);
+    }
+
+    public void submit(Map<UUID, DishSnapshot> snapshots, Instant submittedAt, UUID changedBy) {
         requireDraft("Заказ можно отправить только из статуса DRAFT");
         if (lines.isEmpty()) {
             throw new EmptyOrderException();
@@ -169,59 +173,83 @@ public class CorporateOrder {
         OrderStatus previousStatus = status;
         totalAmount = finalTotal;
         status = OrderStatus.SUBMITTED;
-        history.add(new OrderStatusHistory(this, previousStatus, status, null, null, submittedAt));
+        history.add(new OrderStatusHistory(this, previousStatus, status, null, changedBy, submittedAt));
     }
 
     public void confirm(Instant changedAt) {
+        confirm(changedAt, null);
+    }
+
+    public void confirm(Instant changedAt, UUID changedBy) {
         transitionFrom(
                 OrderStatus.SUBMITTED,
                 OrderStatus.CONFIRMED,
                 null,
-                changedAt,
+                changedAt, changedBy,
                 "Подтвердить можно только заказ в статусе SUBMITTED");
     }
 
     public void reject(String reason, Instant changedAt) {
+        reject(reason, changedAt, null);
+    }
+
+    public void reject(String reason, Instant changedAt, UUID changedBy) {
         if (status != OrderStatus.SUBMITTED) {
             throw new OrderStatusException("Отклонить можно только заказ в статусе SUBMITTED");
         }
-        transitionTo(OrderStatus.REJECTED, normalizeRequiredReason(reason), changedAt);
+        transitionTo(OrderStatus.REJECTED, normalizeRequiredReason(reason), changedAt, changedBy);
     }
 
     public void cancel(String reason, Instant changedAt) {
+        cancel(reason, changedAt, null);
+    }
+
+    public void cancel(String reason, Instant changedAt, UUID changedBy) {
         if (status != OrderStatus.DRAFT
                 && status != OrderStatus.SUBMITTED
                 && status != OrderStatus.CONFIRMED) {
             throw new OrderStatusException(
                     "Отменить можно только заказ в статусе DRAFT, SUBMITTED или CONFIRMED");
         }
-        transitionTo(OrderStatus.CANCELLED, normalizeRequiredReason(reason), changedAt);
+        transitionTo(OrderStatus.CANCELLED, normalizeRequiredReason(reason), changedAt, changedBy);
     }
 
     public void startCooking(Instant changedAt) {
+        startCooking(changedAt, null);
+    }
+
+    public void startCooking(Instant changedAt, UUID changedBy) {
         transitionFrom(
                 OrderStatus.CONFIRMED,
                 OrderStatus.IN_COOKING,
                 null,
-                changedAt,
+                changedAt, changedBy,
                 "Начать приготовление можно только для заказа в статусе CONFIRMED");
     }
 
     public void markReady(Instant changedAt) {
+        markReady(changedAt, null);
+    }
+
+    public void markReady(Instant changedAt, UUID changedBy) {
         transitionFrom(
                 OrderStatus.IN_COOKING,
                 OrderStatus.READY,
                 null,
-                changedAt,
+                changedAt, changedBy,
                 "Отметить готовность можно только для заказа в статусе IN_COOKING");
     }
 
     public void complete(Instant changedAt) {
+        complete(changedAt, null);
+    }
+
+    public void complete(Instant changedAt, UUID changedBy) {
         transitionFrom(
                 OrderStatus.READY,
                 OrderStatus.COMPLETED,
                 null,
-                changedAt,
+                changedAt, changedBy,
                 "Завершить заказ можно только из статуса READY");
     }
 
@@ -251,18 +279,19 @@ public class CorporateOrder {
             OrderStatus targetStatus,
             String reason,
             Instant changedAt,
+            UUID changedBy,
             String conflictMessage) {
         if (status != expectedStatus) {
             throw new OrderStatusException(conflictMessage);
         }
-        transitionTo(targetStatus, reason, changedAt);
+        transitionTo(targetStatus, reason, changedAt, changedBy);
     }
 
-    private void transitionTo(OrderStatus targetStatus, String reason, Instant changedAt) {
+    private void transitionTo(OrderStatus targetStatus, String reason, Instant changedAt, UUID changedBy) {
         Instant transitionTime = requireInstant(changedAt, "Время перехода обязательно");
         OrderStatus previousStatus = status;
         status = targetStatus;
-        history.add(new OrderStatusHistory(this, previousStatus, targetStatus, reason, null, transitionTime));
+        history.add(new OrderStatusHistory(this, previousStatus, targetStatus, reason, changedBy, transitionTime));
     }
 
     private static UUID requireId(UUID id, String message) {

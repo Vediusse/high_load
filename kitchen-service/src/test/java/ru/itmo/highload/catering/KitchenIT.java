@@ -17,17 +17,19 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
-import ru.itmo.highload.catering.kitchen.client.dto.OrderResponse;
-import ru.itmo.highload.catering.kitchen.client.dto.OrderStatus;
+import ru.itmo.highload.catering.kitchen.client.dto.out.OrderResponse;
+import ru.itmo.highload.catering.kitchen.client.dto.out.OrderStatus;
 import ru.itmo.highload.catering.kitchen.service.TaskProjection;
 
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT, useMainMethod=SpringBootTest.UseMainMethod.ALWAYS)
 @org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient
+@org.springframework.context.annotation.Import(ru.itmo.highload.common.security.InternalSecurityTestConfiguration.class)
 class KitchenIT {
     static final OrderFixture owner=new OrderFixture();
     static final PostgreSQLContainer<?> postgres=new PostgreSQLContainer<>("postgres:17.11-alpine3.24");
     static {postgres.start();}
     @DynamicPropertySource static void properties(DynamicPropertyRegistry r) {
+        ru.itmo.highload.common.security.TestTokens.register(r);
         r.add("spring.datasource.url",postgres::getJdbcUrl);r.add("spring.datasource.username",postgres::getUsername);
         r.add("spring.datasource.password",postgres::getPassword);r.add("clients.order.url",owner::url);
     }
@@ -41,6 +43,18 @@ class KitchenIT {
         client=client.mutate().responseTimeout(Duration.ofSeconds(10)).build();
     }
 
+    @Test void onlyKitchenManagerCanOperateKitchenEndpoints() {
+        var order = owner.add(OrderStatus.CONFIRMED);
+        String clientManager = ru.itmo.highload.common.security.TestTokens.bearerWithRoles("CLIENT_MANAGER");
+        String kitchenManager = ru.itmo.highload.common.security.TestTokens.bearerWithRoles("KITCHEN_MANAGER");
+        String path = "/api/v1/orders/" + order.id() + "/start-cooking";
+
+        client.post().uri(path).header("Authorization", clientManager).bodyValue(Map.of("expectedVersion", order.version()))
+                .exchange().expectStatus().isForbidden().expectBody().jsonPath("$.code").isEqualTo("ACCESS_DENIED");
+        client.post().uri(path).header("Authorization", kitchenManager).bodyValue(Map.of("expectedVersion", order.version()))
+                .exchange().expectStatus().isOk();
+    }
+
     @Test void lifecyclePreservesPublicContractTraceAndOriginalReplayWithoutRegressingProjection() {
         var order=owner.add(OrderStatus.CONFIRMED);
         var cooking=command(order,"start-cooking",200,"IN_COOKING");
@@ -52,6 +66,7 @@ class KitchenIT {
         assertThat(completed.totalAmount()).isEqualByComparingTo("360");
         assertThat(completed.lines()).isEqualTo(order.lines());
         assertThat(owner.trace).isEqualTo("kitchen-check");
+        assertThat(owner.bearer).startsWith("Bearer ");
     }
 
     @Test void lostReplyCanBeRetriedWithoutDuplicateTransitionOrFalseLocalSuccess() {
@@ -163,6 +178,17 @@ class KitchenIT {
     @Test void malformedDependencyAndUnknownErrorNeverBecomeSuccess() {
         owner.mode="malformed";queue(0,20,503);owner.mode="bad-error";queue(0,20,503);
         assertThat(jdbc.queryForObject("select count(*) from kitchen_task",Integer.class)).isZero();
+    }
+
+    @Test void downstreamSecurityErrorsAreNotAvailabilityFailures() {
+        var order = owner.add(OrderStatus.CONFIRMED);
+        owner.mode = "unauthorized";
+        command(order, "start-cooking", 401, null);
+        owner.mode = "forbidden";
+        command(order, "start-cooking", 403, null);
+        assertThat(breakers.circuitBreaker("order").getMetrics().getNumberOfBufferedCalls()).isZero();
+        assertThat(owner.transitions.get()).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from kitchen_task", Integer.class)).isZero();
     }
 
     @Test void concurrentOldAndNewObservationsNeverRegressTask() throws Exception {

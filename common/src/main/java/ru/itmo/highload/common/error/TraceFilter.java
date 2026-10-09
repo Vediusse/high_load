@@ -7,7 +7,8 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
-@Order(-100)
+// Run before Spring Security so authentication failures also carry traceId.
+@Order(-200)
 public class TraceFilter implements WebFilter {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {

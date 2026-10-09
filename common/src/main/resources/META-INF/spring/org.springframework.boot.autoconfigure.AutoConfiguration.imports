@@ -3,3 +3,4 @@ ru.itmo.highload.common.config.CommonPersistenceAutoConfiguration
 ru.itmo.highload.common.config.CommonOpenApiAutoConfiguration
 ru.itmo.highload.common.config.CommonFeignAutoConfiguration
 ru.itmo.highload.common.config.CommonBlockingAutoConfiguration
+ru.itmo.highload.common.config.CommonSecurityAutoConfiguration

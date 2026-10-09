@@ -24,11 +24,13 @@ import static org.assertj.core.api.Assertions.*;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         useMainMethod = SpringBootTest.UseMainMethod.ALWAYS)
 @AutoConfigureWebTestClient
+@org.springframework.context.annotation.Import(ru.itmo.highload.common.security.InternalSecurityTestConfiguration.class)
 class CatalogApiIT {
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17.11-alpine3.24");
     static { POSTGRES.start(); }
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
+        ru.itmo.highload.common.security.TestTokens.register(registry);
         registry.add("spring.r2dbc.url", () -> "r2dbc:postgresql://" + POSTGRES.getHost() + ":"
                 + POSTGRES.getMappedPort(5432) + "/" + POSTGRES.getDatabaseName());
         registry.add("spring.r2dbc.username", POSTGRES::getUsername);
@@ -52,6 +54,16 @@ class CatalogApiIT {
     @BeforeEach void clean() {
         template.getDatabaseClient().sql("TRUNCATE dish_category, dish, category CASCADE").fetch().rowsUpdated().block();
     }
+
+    @Test void menuIsReadableByClientManagerButOnlyKitchenManagerCanChangeIt() {
+        String clientManager = ru.itmo.highload.common.security.TestTokens.bearerWithRoles("CLIENT_MANAGER");
+        client.get().uri("/api/v1/dishes").header("Authorization", clientManager)
+                .exchange().expectStatus().isOk();
+        client.post().uri("/api/v1/categories").header("Authorization", clientManager)
+                .bodyValue(Map.of("name", "Запрещённая категория"))
+                .exchange().expectStatus().isForbidden().expectBody().jsonPath("$.code").isEqualTo("ACCESS_DENIED");
+    }
+
     JsonNode post(String path, Object body) {
         return client.post().uri(path).bodyValue(body).exchange().expectStatus().isCreated()
                 .expectBody(JsonNode.class).returnResult().getResponseBody();

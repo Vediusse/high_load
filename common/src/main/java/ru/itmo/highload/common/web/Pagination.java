@@ -3,7 +3,7 @@ package ru.itmo.highload.common.web;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.data.domain.PageRequest;
-import ru.itmo.highload.common.error.FieldErrorResponse;
+import ru.itmo.highload.common.dto.out.FieldErrorResponse;
 import ru.itmo.highload.common.error.RequestValidationException;
 
 public final class Pagination {

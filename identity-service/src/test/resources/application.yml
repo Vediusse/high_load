@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: identity-service
+  cloud:
+    circuitbreaker:
+      resilience4j:
+        disable-time-limiter: true
+        disable-thread-pool: true
+    config:
+      enabled: false
+    openfeign:
+      client:
+        config:
+          order-service:
+            connectTimeout: 300
+            readTimeout: 300
+  datasource:
+    hikari:
+      connection-timeout: 500
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+eureka:
+  client:
+    enabled: false
+identity:
+  jwt:
+    issuer: corporate-catering-identity
+    access-ttl: 15m
+    clock-skew: 30s
+  bootstrap:
+    login: supervisor
+    password: integration-password-42
+catering:
+  blocking:
+    enabled: true
+    thread-name-prefix: identity-blocking
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      order:
+        slidingWindowSize: 4
+        minimumNumberOfCalls: 4
+        permittedNumberOfCallsInHalfOpenState: 2
+        waitDurationInOpenState: 30s
+        ignoreExceptions:
+          - ru.itmo.highload.common.error.ApiException
+
+---
+catering:
+  security:
+    internal:
+      enabled: true

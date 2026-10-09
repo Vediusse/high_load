@@ -1,0 +1,120 @@
+L3.0 — базовая линия перед добавлением безопасности
+Дата: 2026-10-09
+
+Исходная версия
+  main: d4e07bb (merge PR #2, лабораторная 2).
+  Ветка: feature/lab3.
+  30797a6: перенос согласованных локальных правок c1c3323 из feature/lab2.
+  Срез L3.0 не меняет права доступа, бизнес-контракты и схему данных.
+
+Воспроизведение
+  Требуются Java 21, Docker Compose, Python 3, curl, jq и заполненный .env
+  по .env.example. Значения паролей здесь не сохраняются.
+
+  JAVA_HOME="$(/usr/libexec/java_home -v 21)" ./mvnw -B -ntp clean verify
+  HTTP_PORT=18081 docker compose -p high-load-lab3-baseline-20261009 config --quiet
+  HTTP_PORT=18081 docker compose -p high-load-lab3-baseline-20261009 up --build -d --wait --wait-timeout 240
+  scripts/lab2-infrastructure.sh high-load-lab3-baseline-20261009 http://localhost:18081
+  python3 scripts/lab2-topology.py high-load-lab3-baseline-20261009 http://localhost:18081
+  scripts/lab2-catalog.sh high-load-lab3-baseline-20261009 http://localhost:18081
+  python3 scripts/lab2-kitchen.py high-load-lab3-baseline-20261009 http://localhost:18081
+  npx --yes --package newman@6.2.1 newman run postman/business-scenarios.postman_collection.json --env-var baseUrl=http://localhost:18081 --iteration-count 2
+
+  Скрипты отказов останавливают сервисы: запускать их последовательно
+  на отдельном тестовом проекте. Первый инфраструктурный скрипт также
+  проверяет OpenAPI и выполняет scripts/lab1-defense.sh.
+  Чистая БД получается при первом запуске с новым именем Compose-проекта.
+  Повторный up использует сохранённые volumes, а не пустую схему.
+
+Доступ до внедрения security
+  Все 32 публичные бизнес-операции доступны без JWT. Полный список
+  с владельцами: lab3-endpoints.tsv; сформирован из живого OpenAPI.
+  Отсутствуют Spring Security, login, пользователи и проверка ролей.
+  Gateway — единственный сервис с опубликованным портом.
+  /swagger-ui/index.html и /v3/api-docs{,/catalog,/kitchen} открыты.
+  Gateway обслуживает собственные /actuator/health и /actuator/info.
+  /internal/**, /eureka/apps и /actuator/env через Gateway возвращают 404.
+  Внутри Compose-сети прямые API сервисов пока также без аутентификации:
+  отсутствие внешнего маршрута не является проверкой полномочий.
+  Config Server и Eureka не публикуются на хост; их внутренние HTTP API
+  не требуют аутентификации. Базы данных доступны только в Compose-сети.
+
+Внутренние бизнес-операции (скрыты в публичном OpenAPI)
+  catalog-service: POST /internal/v1/dishes/snapshots
+  order-service: POST /internal/v1/orders/states
+  order-service: GET /internal/v1/orders/kitchen
+  order-service: GET /internal/v1/orders/{id}
+  order-service: POST /internal/v1/orders/{id}/kitchen-commands
+  kitchen-service: GET /internal/v1/kitchen/tasks
+
+Межсервисные вызовы
+  Gateway -> Catalog/Order/Kitchen: маршруты lb://, адреса из Eureka.
+  /start-cooking, /mark-ready и /complete направляются в Kitchen;
+  остальные команды заказа, включая confirm/reject/cancel, — в Order.
+  Order -> Catalog: CatalogClient.snapshots; POST /internal/v1/dishes/snapshots.
+  Используется при замене позиций и отправке заказа, пакеты до 1000 ID.
+  Kitchen -> Order: OrderClient.get/queue/states/command; четыре маршрута
+  /internal/v1/orders, перечисленные выше. Kitchen хранит локальную проекцию
+  и квитанции команд остаются у владельца заказа — Order.
+  Order -> Kitchen прямого Feign-вызова нет.
+  Feign передаёт X-Trace-Id; сведения об аутентифицированном пользователе
+  отсутствуют. Повтор команды кухни идемпотентен.
+  Сервисы получают конфигурацию из Config Server и регистрируются в Eureka.
+  Каждый бизнес-сервис подключается только к собственной PostgreSQL.
+
+Circuit Breaker и fallback
+  В Order: circuit catalog, CatalogGateway.getActiveDishPrices.
+  В Kitchen: circuit order, OrderGateway.call.
+  Оба fallback находятся в Java, во втором аргументе breaker.run:
+  известные ApiException сохраняются; остальные сбои дают
+  503 DEPENDENCY_UNAVAILABLE. Заказ не переводится в успешное состояние.
+  В Gateway circuit breaker отсутствует: connect timeout 1s, response 10s,
+  GatewayErrors формирует ответ 503 при недоступном маршруте.
+  Feign: connect 1s, read 2s; отключены TimeLimiter и дополнительный executor.
+  Оба circuit: COUNT_BASED, окно 50, минимум 20, ошибки >=50%, медленные
+  вызовы >=1.5s, их доля >=50%; OPEN 30s (можно переопределить env),
+  HALF_OPEN 5 проб, максимум 15s, переход по следующему запросу.
+  ApiException исключены из статистики отказов.
+  OrderTransactionsIT и KitchenIT проверяют OPEN, успешное закрытие,
+  повторное открытие при неуспешных пробах и игнорирование бизнес-ошибок.
+  В интеграционных тестах пауза OPEN сокращена до 1s; Compose использует 30s.
+  Compose-скрипты проверяют реальные отключения и восстановление, но сами
+  не утверждают состояние OPEN: восемь отказов меньше минимальной выборки 20.
+  Сценарий кухни после восстановления повторяет только 503 с кодом
+  DEPENDENCY_UNAVAILABLE, до 120s на операцию. Первый успешный ответ ещё
+  не гарантирует закрытия circuit; остальные ошибки сразу проваливают сценарий.
+  Команда и expectedVersion при повторе неизменны; проверяются квитанции,
+  отсутствие дублей истории и конечный статус.
+
+Реактивное выполнение
+  Catalog: WebFlux + ReactiveCrudRepository + PostgreSQL R2DBC,
+  реактивные транзакции для изменения блюда и его категорий.
+  Order/Kitchen: WebFlux + JPA/Feign через BlockingRequests.call,
+  Mono.deferContextual/fromCallable/subscribeOn и выделенный boundedElastic.
+  ReactiveExecutionIT проверяет потоки JPA/Feign, транзакцию и traceId.
+  Обычные внутренние списки snapshots/states возвращают Flux.
+  Страницы с items и метаданными возвращают Mono<PageResponse<T>>;
+  cursor-меню — Mono<DishCursorPageResponse>. ResponseEntity в них нет.
+
+Доказательства текущего запуска
+  AI/state/L3.0-baseline/: логи Maven, Compose и сквозных проверок,
+  исходные OpenAPI-документы, сводка тестов и покрытия.
+  AI/state/L3.0-report.md: итог контрольной точки и ограничения проверки.
+
+Проверенные результаты
+  clean verify: 98 тестов, 0 failures/errors/skipped; все JaCoCo gates пройдены.
+  Покрытие строк: Common/Config/Discovery 100%, Gateway 85%, Catalog 97.86%,
+  Order 95.11%, Kitchen 96.46%.
+  Штатные Dockerfile и compose.yaml: шесть приложений и три PostgreSQL
+  запущены на новых volumes, все девять контейнеров достигли healthy.
+  Infrastructure/topology: Eureka, Config, Gateway, Swagger, владельцы БД,
+  закрытые внешние маршруты и единый формат ошибок проверены.
+  OpenAPI: все 32 публичные операции, параметры, DTO и ответы совпали
+  с baseline первой лабораторной; сценарий до COMPLETED прошёл.
+  Postman/Newman 6.2.1: 2 итерации, 130 запросов, 288 assertions, 0 failures.
+  Отключение Catalog: 503 без изменения заказа; восстановление с одной
+  записью SUBMITTED и правильной суммой 360.
+  Отключения Kitchen/Order: безопасный отказ, восстановление, конкурентные
+  повторы и завершение до COMPLETED; 3 квитанции и 5 записей истории.
+  Итоговая topology-проверка после отключений: PASS, 9 healthy контейнеров.
+  L3.0: READY_FOR_REVIEW; следующий срез L3.1 ещё не начат.

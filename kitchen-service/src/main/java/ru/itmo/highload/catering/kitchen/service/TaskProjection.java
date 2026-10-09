@@ -6,9 +6,9 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.itmo.highload.catering.kitchen.client.dto.OrderResponse;
-import ru.itmo.highload.catering.kitchen.client.dto.OrderState;
-import ru.itmo.highload.catering.kitchen.client.dto.OrderStatus;
+import ru.itmo.highload.catering.kitchen.client.dto.out.OrderResponse;
+import ru.itmo.highload.catering.kitchen.client.dto.out.OrderState;
+import ru.itmo.highload.catering.kitchen.client.dto.out.OrderStatus;
 import ru.itmo.highload.catering.kitchen.repository.KitchenTaskRepository;
 import ru.itmo.highload.common.web.Pagination;
 

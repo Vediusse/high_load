@@ -7,8 +7,10 @@ import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import ru.itmo.highload.catering.catalog.client.CatalogClient;
-import ru.itmo.highload.catering.catalog.dto.ActiveDishData;
-import ru.itmo.highload.common.error.ApiError;
+import ru.itmo.highload.catering.catalog.client.dto.in.SnapshotRequest;
+import ru.itmo.highload.catering.catalog.client.dto.out.DishSnapshot;
+import ru.itmo.highload.catering.catalog.dto.out.ActiveDishData;
+import ru.itmo.highload.common.dto.out.ApiError;
 import ru.itmo.highload.common.error.ApiException;
 
 @Service
@@ -23,7 +25,7 @@ public class CatalogGateway {
         this.mapper = mapper;
     }
 
-    public Map<UUID, ActiveDishData> getActiveDishPrices(Set<UUID> ids) {
+    public Map<UUID, ActiveDishData> getActiveDishPrices(Set<UUID> ids, String bearer) {
         Objects.requireNonNull(ids, "Набор блюд обязателен");
         if (ids.isEmpty()) return Map.of();
         String traceId = org.slf4j.MDC.get("traceId");
@@ -33,7 +35,7 @@ public class CatalogGateway {
         for (int offset = 0; offset < requested.size(); offset += CatalogClient.MAX_SNAPSHOT_IDS) {
             Set<UUID> batch = new LinkedHashSet<>(requested.subList(offset,
                     Math.min(offset + CatalogClient.MAX_SNAPSHOT_IDS, requested.size())));
-            var snapshots = breakers.create("catalog").run(() -> fetch(batch, propagatedTrace), error -> {
+            var snapshots = breakers.create("catalog").run(() -> fetch(batch, propagatedTrace, bearer), error -> {
                 if (error instanceof ApiException api) throw api;
                 throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "DEPENDENCY_UNAVAILABLE", "Каталог временно недоступен");
             });
@@ -42,12 +44,17 @@ public class CatalogGateway {
         return result;
     }
 
-    private Map<UUID, ActiveDishData> fetch(Set<UUID> ids, String traceId) {
-        List<CatalogClient.DishSnapshot> snapshots;
+    private Map<UUID, ActiveDishData> fetch(Set<UUID> ids, String traceId, String bearer) {
+        List<DishSnapshot> snapshots;
         try {
-            snapshots = client.snapshots(new CatalogClient.SnapshotRequest(ids), traceId);
+            snapshots = client.snapshots(new SnapshotRequest(ids), bearer, traceId);
         } catch (FeignException error) {
-            if (error.status() == 404 || error.status() == 422) {
+            // A security status is sufficient; the default HTTP transport can omit a 401 body.
+            if (error.status() == 401)
+                throw new ApiException(HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED", "Требуется действительный токен");
+            if (error.status() == 403)
+                throw new ApiException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Недостаточно прав");
+            if (Set.of(404, 422).contains(error.status())) {
                 try {
                     ApiError body = mapper.readValue(error.contentUTF8(), ApiError.class);
                     if ((error.status() == 404 && "RESOURCE_NOT_FOUND".equals(body.code()))

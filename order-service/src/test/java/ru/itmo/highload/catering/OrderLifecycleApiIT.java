@@ -13,17 +13,17 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.test.web.reactive.server.EntityExchangeResult;
-import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.reactive.server.EntityExchangeResult;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.util.UriComponentsBuilder;
 import ru.itmo.highload.catering.CatalogFixture.Dish;
-import ru.itmo.highload.catering.order.dto.CreateOrderRequest;
-import ru.itmo.highload.catering.order.dto.OrderLineInput;
-import ru.itmo.highload.catering.order.dto.OrderResponse;
-import ru.itmo.highload.catering.order.dto.ReplaceOrderLinesRequest;
+import ru.itmo.highload.catering.order.dto.in.CreateOrderRequest;
+import ru.itmo.highload.catering.order.dto.in.OrderLineInput;
+import ru.itmo.highload.catering.order.dto.in.ReplaceOrderLinesRequest;
+import ru.itmo.highload.catering.order.dto.out.OrderResponse;
 import ru.itmo.highload.catering.order.service.OrderService;
 import ru.itmo.highload.catering.organization.entity.DeliveryPoint;
 import ru.itmo.highload.catering.organization.entity.Organization;
@@ -48,6 +48,53 @@ class OrderLifecycleApiIT extends AbstractPostgresIT {
 
     @Autowired
     DeliveryPointRepository deliveryPointRepository;
+
+    @Test
+    void roleMatrixSeparatesOrganizationOrdersAndKitchenCommands() {
+        String kitchenManager = ru.itmo.highload.common.security.TestTokens.bearerWithRoles("KITCHEN_MANAGER");
+        String clientManager = ru.itmo.highload.common.security.TestTokens.bearerWithRoles("CLIENT_MANAGER");
+
+        client.get().uri("/api/v1/organizations").header("Authorization", kitchenManager)
+                .exchange().expectStatus().isForbidden().expectBody().jsonPath("$.code").isEqualTo("ACCESS_DENIED");
+        client.get().uri("/api/v1/organizations").header("Authorization", clientManager)
+                .exchange().expectStatus().isOk();
+
+        String commandPath = "/api/v1/orders/" + UUID.randomUUID() + "/confirm";
+        client.post().uri(commandPath).header("Authorization", clientManager)
+                .bodyValue(Map.of("expectedVersion", 0))
+                .exchange().expectStatus().isForbidden().expectBody().jsonPath("$.code").isEqualTo("ACCESS_DENIED");
+        client.post().uri(commandPath).header("Authorization", kitchenManager)
+                .bodyValue(Map.of("expectedVersion", 0))
+                .exchange().expectStatus().isNotFound();
+    }
+
+    @Test
+    void representativeIsScopedToOwnOrganizationBeforePaginationAndObjectRead() throws Exception {
+        Fixture own = fixture();
+        Fixture foreign = fixture();
+        OrderResponse foreignOrder = draftOrder(foreign);
+        String representative = ru.itmo.highload.common.security.TestTokens.bearerForOrganization(own.organizationId());
+
+        EntityExchangeResult<byte[]> created = client.post().uri("/api/v1/orders")
+                .header("Authorization", representative)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(json(Map.of(
+                        "deliveryPointId", own.deliveryPointId(),
+                        "requestedDeliveryAt", OffsetDateTime.now(ZoneOffset.UTC).plusDays(2),
+                        "comment", "own")))
+                .exchange().expectStatus().isCreated().expectBody().returnResult();
+        JsonNode ownOrder = body(created);
+        assertThat(ownOrder.get("organizationId").asText()).isEqualTo(own.organizationId().toString());
+
+        client.get().uri("/api/v1/orders/" + foreignOrder.id()).header("Authorization", representative)
+                .exchange().expectStatus().isNotFound().expectBody().jsonPath("$.code").isEqualTo("RESOURCE_NOT_FOUND");
+        client.get().uri("/api/v1/orders?size=20").header("Authorization", representative)
+                .exchange().expectStatus().isOk().expectHeader().valueEquals("X-Total-Count", "1")
+                .expectBody().jsonPath("$.items.length()").isEqualTo(1)
+                .jsonPath("$.items[0].id").isEqualTo(ownOrder.get("id").asText());
+        client.get().uri("/api/v1/orders?organizationId=" + foreign.organizationId()).header("Authorization", representative)
+                .exchange().expectStatus().isNotFound().expectBody().jsonPath("$.code").isEqualTo("RESOURCE_NOT_FOUND");
+    }
 
 
     @Test
@@ -74,6 +121,7 @@ class OrderLifecycleApiIT extends AbstractPostgresIT {
                 .jsonPath("$.items[1].toStatus").isEqualTo("CONFIRMED")
                 .jsonPath("$.items[0].orderId").isEqualTo(order.id().toString())
                 .jsonPath("$.items[0].changedBy").isEqualTo((Object) null)
+                .jsonPath("$.items[1].changedBy").isEqualTo(ru.itmo.highload.common.security.TestTokens.SUBJECT)
                 .jsonPath("$.hasNext").isEqualTo(true);
 
         client.get().uri(UriComponentsBuilder.fromPath("/api/v1/orders/{id}/history").queryParam("page", "2").queryParam("size", "2").buildAndExpand(order.id()).toUriString()).exchange()
@@ -315,8 +363,8 @@ class OrderLifecycleApiIT extends AbstractPostgresIT {
                 draft.id(),
                 new ReplaceOrderLinesRequest(
                         draft.version(),
-                        List.of(new OrderLineInput(fixture.dishId(), 2))));
-        return orderService.submit(draft.id(), withLines.version());
+                        List.of(new OrderLineInput(fixture.dishId(), 2))), ru.itmo.highload.common.security.TestTokens.bearer());
+        return orderService.submit(draft.id(), withLines.version(), ru.itmo.highload.common.security.TestTokens.bearer());
     }
 
     private String json(Object value) throws Exception {

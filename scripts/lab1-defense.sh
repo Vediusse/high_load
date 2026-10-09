@@ -29,6 +29,7 @@ call_api() {
     local path="$2"
     local expected_status="$3"
     local payload="${4:-}"
+    local trace_id="${5:-}"
     response_body="${tmp_dir}/body.json"
     response_headers="${tmp_dir}/headers.txt"
 
@@ -40,6 +41,12 @@ call_api() {
         --write-out '%{http_code}'
         --header 'Accept: application/json'
     )
+    if [[ -n "${AUTH_TOKEN:-}" ]]; then
+        curl_args+=(--header "Authorization: Bearer ${AUTH_TOKEN}")
+    fi
+    if [[ -n "${trace_id}" ]]; then
+        curl_args+=(--header "X-Trace-Id: ${trace_id}")
+    fi
     if [[ -n "${payload}" ]]; then
         curl_args+=(--header 'Content-Type: application/json' --data "${payload}")
     fi
@@ -161,19 +168,7 @@ call_api GET '/api/v1/orders?size=51' 400
 assert_json '.code == "VALIDATION_FAILED" and .fieldErrors[0].field == "size"' \
     "size=51 должен вернуть структурированную ошибку валидации"
 
-response_body="${tmp_dir}/trace-body.json"
-response_headers="${tmp_dir}/trace-headers.txt"
-response_status="$(curl --silent --show-error \
-    --request POST \
-    --header 'Accept: application/json' \
-    --header 'Content-Type: application/json' \
-    --header 'X-Trace-Id: lab1-defense-validation' \
-    --data '{"name":" ","phone":"8999"}' \
-    --dump-header "${response_headers}" \
-    --output "${response_body}" \
-    --write-out '%{http_code}' \
-    "${base_url}/api/v1/organizations")"
-[[ "${response_status}" == "400" ]] || fail "невалидная организация должна вернуть HTTP 400"
+call_api POST /api/v1/organizations 400 '{"name":" ","phone":"8999"}' 'lab1-defense-validation'
 assert_json '.code == "VALIDATION_FAILED" and .traceId == "lab1-defense-validation"' \
     "тело ошибки должно содержать переданный traceId"
 [[ "$(header_value X-Trace-Id)" == "lab1-defense-validation" ]] || fail "ответ должен вернуть X-Trace-Id"

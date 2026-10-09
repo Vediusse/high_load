@@ -18,10 +18,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
-import ru.itmo.highload.common.dto.PageResponse;
+import ru.itmo.highload.common.dto.out.PageResponse;
 import ru.itmo.highload.common.error.ApiException;
 
-@SpringBootTest(classes = CommonWebIT.Application.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(properties = "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.security.reactive.ReactiveSecurityAutoConfiguration", classes = CommonWebIT.Application.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
 class CommonWebIT {
     @SpringBootConfiguration
@@ -68,6 +68,12 @@ class CommonWebIT {
                 .expectBody().jsonPath("$.code").isEqualTo("VALIDATION_FAILED");
     }
 
+    @Test void downstreamUnauthorizedIncludesBearerChallenge() {
+        client.get().uri("/api/v1/errors/unauthorized").exchange()
+                .expectStatus().isUnauthorized().expectHeader().valueEquals("WWW-Authenticate", "Bearer")
+                .expectBody().jsonPath("$.code").isEqualTo("AUTHENTICATION_REQUIRED");
+    }
+
     @RestController
     static class ExampleController {
         @GetMapping("/api/v1/trace")
@@ -82,6 +88,7 @@ class CommonWebIT {
         void error(@PathVariable String kind) {
             throw switch (kind) {
                 case "business" -> new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,"RULE_FAILED","Test rule");
+                case "unauthorized" -> new ApiException(HttpStatus.UNAUTHORIZED,"AUTHENTICATION_REQUIRED","Invalid token");
                 case "busy" -> new RejectedExecutionException();
                 case "integrity" -> new DataIntegrityViolationException("test constraint");
                 case "optimistic" -> new OptimisticLockingFailureException("test version");

@@ -3,7 +3,7 @@ spring:
     config:
       enabled: false
   application:
-    name: corporate-catering
+    name: kitchen-service
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/catering}
     username: ${DB_USER:catering}
@@ -142,3 +142,9 @@ catering:
   blocking:
     enabled: true
     thread-name-prefix: kitchen-blocking
+
+---
+catering:
+  security:
+    internal:
+      enabled: true

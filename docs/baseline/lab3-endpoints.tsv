@@ -1,0 +1,39 @@
+service	method	path	exposure	authentication	description
+catalog-service	DELETE	/api/v1/categories/{id}	gateway	none	Удалить неиспользуемую категорию
+catalog-service	DELETE	/api/v1/dishes/{id}	gateway	none	Деактивировать блюдо
+catalog-service	GET	/api/v1/categories	gateway	none	Получить страницу категорий
+catalog-service	GET	/api/v1/dishes	gateway	none	Получить активное меню cursor-страницей без total
+catalog-service	GET	/api/v1/dishes/{id}	gateway	none	Получить блюдо
+catalog-service	POST	/api/v1/categories	gateway	none	Создать категорию
+catalog-service	POST	/api/v1/dishes	gateway	none	Создать блюдо
+catalog-service	POST	/internal/v1/dishes/snapshots	compose-network	none	Hidden controller; no Gateway route
+catalog-service	PUT	/api/v1/categories/{id}	gateway	none	Изменить категорию
+catalog-service	PUT	/api/v1/dishes/{id}	gateway	none	Изменить блюдо
+kitchen-service	GET	/internal/v1/kitchen/tasks	compose-network	none	Hidden controller; no Gateway route
+kitchen-service	POST	/api/v1/orders/{id}/complete	gateway	none	Завершить выданный заказ
+kitchen-service	POST	/api/v1/orders/{id}/mark-ready	gateway	none	Отметить заказ готовым
+kitchen-service	POST	/api/v1/orders/{id}/start-cooking	gateway	none	Начать приготовление подтверждённого заказа
+order-service	DELETE	/api/v1/delivery-points/{id}	gateway	none	Деактивировать точку выдачи
+order-service	DELETE	/api/v1/orders/{id}	gateway	none	Удалить пустой черновик
+order-service	DELETE	/api/v1/organizations/{id}	gateway	none	Деактивировать организацию
+order-service	GET	/api/v1/orders	gateway	none	Получить страницу заказов с фильтрами
+order-service	GET	/api/v1/orders/{id}	gateway	none	Получить заказ с позициями
+order-service	GET	/api/v1/orders/{id}/history	gateway	none	Получить хронологическую страницу истории статусов
+order-service	GET	/api/v1/organizations	gateway	none	Получить страницу организаций
+order-service	GET	/api/v1/organizations/{id}	gateway	none	Получить организацию
+order-service	GET	/api/v1/organizations/{organizationId}/delivery-points	gateway	none	Получить страницу точек выдачи организации
+order-service	GET	/internal/v1/orders/kitchen	compose-network	none	Hidden controller; no Gateway route
+order-service	GET	/internal/v1/orders/{id}	compose-network	none	Hidden controller; no Gateway route
+order-service	POST	/api/v1/orders	gateway	none	Создать пустой черновик заказа
+order-service	POST	/api/v1/orders/{id}/cancel	gateway	none	Отменить заказ до начала приготовления
+order-service	POST	/api/v1/orders/{id}/confirm	gateway	none	Подтвердить заказ целиком
+order-service	POST	/api/v1/orders/{id}/reject	gateway	none	Отклонить заказ целиком с причиной
+order-service	POST	/api/v1/orders/{id}/submit	gateway	none	Отправить заказ и зафиксировать снимки цен
+order-service	POST	/api/v1/organizations	gateway	none	Создать организацию
+order-service	POST	/api/v1/organizations/{organizationId}/delivery-points	gateway	none	Добавить точку выдачи организации
+order-service	POST	/internal/v1/orders/states	compose-network	none	Hidden controller; no Gateway route
+order-service	POST	/internal/v1/orders/{id}/kitchen-commands	compose-network	none	Hidden controller; no Gateway route
+order-service	PUT	/api/v1/delivery-points/{id}	gateway	none	Изменить точку выдачи
+order-service	PUT	/api/v1/orders/{id}/details	gateway	none	Изменить детали черновика
+order-service	PUT	/api/v1/orders/{id}/lines	gateway	none	Атомарно заменить позиции черновика
+order-service	PUT	/api/v1/organizations/{id}	gateway	none	Изменить организацию

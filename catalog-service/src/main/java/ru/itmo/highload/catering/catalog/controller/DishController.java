@@ -5,12 +5,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
-import reactor.core.publisher.Mono;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpResponse;
-import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,14 +18,16 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import ru.itmo.highload.catering.catalog.dto.CreateDishRequest;
-import ru.itmo.highload.catering.catalog.dto.DishCursorPageResponse;
-import ru.itmo.highload.catering.catalog.dto.DishResponse;
-import ru.itmo.highload.catering.catalog.dto.UpdateDishRequest;
+import reactor.core.publisher.Mono;
+import ru.itmo.highload.catering.catalog.dto.in.CreateDishRequest;
+import ru.itmo.highload.catering.catalog.dto.in.UpdateDishRequest;
+import ru.itmo.highload.catering.catalog.dto.out.DishCursorPageResponse;
+import ru.itmo.highload.catering.catalog.dto.out.DishResponse;
 import ru.itmo.highload.catering.catalog.service.CatalogService;
-import ru.itmo.highload.common.web.Pagination;
 import ru.itmo.highload.common.config.StandardApiErrors;
+import ru.itmo.highload.common.web.Pagination;
 
 @RestController
 @RequestMapping("/api/v1/dishes")
@@ -38,6 +39,7 @@ public class DishController {
     private final CatalogService catalogService;
 
     @PostMapping
+    @PreAuthorize("hasRole('KITCHEN_MANAGER')")
     @Operation(summary = "Создать блюдо")
     @ApiResponse(responseCode = "201", description = "Блюдо создано")
     @ResponseStatus(HttpStatus.CREATED)
@@ -47,12 +49,14 @@ public class DishController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ORGANIZATION_REPRESENTATIVE', 'CLIENT_MANAGER', 'KITCHEN_MANAGER')")
     @Operation(summary = "Получить блюдо")
     public Mono<DishResponse> get(@PathVariable UUID id) {
         return catalogService.getDish(id);
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('KITCHEN_MANAGER')")
     @Operation(summary = "Изменить блюдо")
     public Mono<DishResponse> update(
             @PathVariable UUID id,
@@ -61,6 +65,7 @@ public class DishController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('KITCHEN_MANAGER')")
     @Operation(summary = "Деактивировать блюдо")
     @ApiResponse(responseCode = "204", description = "Блюдо деактивировано")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -69,6 +74,7 @@ public class DishController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ORGANIZATION_REPRESENTATIVE', 'CLIENT_MANAGER', 'KITCHEN_MANAGER')")
     @Operation(summary = "Получить активное меню cursor-страницей без total")
     public Mono<DishCursorPageResponse> list(
             @RequestParam(required = false) UUID afterId,

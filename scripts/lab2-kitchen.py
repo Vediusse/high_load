@@ -14,18 +14,28 @@ base = sys.argv[2] if len(sys.argv) > 2 else "http://localhost:18080"
 compose = ["docker", "compose", "-p", project]
 
 
-def api(method, path, data=None, expected=200):
+def api(method, path, data=None, expected=200, *, retry_unavailable=False):
     request = urllib.request.Request(base + "/api/v1" + path, method=method,
         data=None if data is None else json.dumps(data).encode(),
         headers={"Content-Type": "application/json", "X-Trace-Id": "kitchen-compose"})
-    try:
-        response = urllib.request.urlopen(request, timeout=15)
-    except urllib.error.HTTPError as error:
-        response = error
-    with response:
-        body = json.load(response)
-        assert response.status == expected, (path, response.status, body)
-        assert response.headers["X-Trace-Id"] == "kitchen-compose"
+    deadline = time.monotonic() + 120
+    while True:
+        try:
+            response = urllib.request.urlopen(request, timeout=15)
+        except urllib.error.HTTPError as error:
+            response = error
+        with response:
+            body = json.load(response)
+            status = response.status
+            assert response.headers["X-Trace-Id"] == "kitchen-compose"
+        # A successful probe does not mean the circuit has finished recovery.
+        # Retry only a known availability error, with the same command/version.
+        if (retry_unavailable and status == 503 and body.get("code") == "DEPENDENCY_UNAVAILABLE"
+                and time.monotonic() < deadline):
+            print(f"Recovery: retry {method} {path} after 503 DEPENDENCY_UNAVAILABLE", flush=True)
+            time.sleep(2)
+            continue
+        assert status == expected, (path, status, body)
         return body
 
 
@@ -81,14 +91,7 @@ finally:
     start("kitchen-service")
 
 # Let registration refresh before injecting the next failure.
-for attempt in range(30):
-    try:
-        api("POST", f"/orders/{order['id']}/start-cooking", {}, 400)
-        break
-    except AssertionError:
-        time.sleep(2)
-else:
-    raise AssertionError("Kitchen route did not recover")
+api("POST", f"/orders/{order['id']}/start-cooking", {}, 400, retry_unavailable=True)
 
 stop("order-service")
 try:
@@ -102,25 +105,23 @@ try:
 finally:
     start("order-service")
 
-# Waiting only on failures: the first successful call is the sole state transition.
-for attempt in range(30):
-    try:
-        cooking = api("POST", f"/orders/{order['id']}/start-cooking", {"expectedVersion": order["version"]})
-        break
-    except AssertionError:
-        time.sleep(2)
-else:
-    raise AssertionError("Order circuit did not recover")
+# Every command may meet a transient OPEN/HALF_OPEN circuit after the outage.
+# Identical retries are safe; the receipt and history checks below detect duplicates.
+cooking = api("POST", f"/orders/{order['id']}/start-cooking",
+    {"expectedVersion": order["version"]}, retry_unavailable=True)
 with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
     responses = list(pool.map(lambda _: api("POST", f"/orders/{order['id']}/start-cooking",
-        {"expectedVersion": order["version"]}), range(4)))
+        {"expectedVersion": order["version"]}, retry_unavailable=True), range(4)))
 assert all(response == cooking for response in responses)
-ready = api("POST", f"/orders/{order['id']}/mark-ready", {"expectedVersion": cooking["version"]})
-completed = api("POST", f"/orders/{order['id']}/complete", {"expectedVersion": ready["version"]})
-assert api("POST", f"/orders/{order['id']}/start-cooking", {"expectedVersion": order["version"]}) == cooking
+ready = api("POST", f"/orders/{order['id']}/mark-ready",
+    {"expectedVersion": cooking["version"]}, retry_unavailable=True)
+completed = api("POST", f"/orders/{order['id']}/complete",
+    {"expectedVersion": ready["version"]}, retry_unavailable=True)
+assert api("POST", f"/orders/{order['id']}/start-cooking",
+    {"expectedVersion": order["version"]}, retry_unavailable=True) == cooking
 assert sql("kitchen-postgres", f"select status from kitchen_task where order_id='{order['id']}'") == "COMPLETED"
 assert sql("order-postgres", f"select count(*) from kitchen_command where order_id='{order['id']}'") == "3"
-assert len(api("GET", f"/orders/{order['id']}/history")["items"]) == 5
+assert len(api("GET", f"/orders/{order['id']}/history", retry_unavailable=True)["items"]) == 5
 assert completed["totalAmount"] == 360
 print("PASS: Kitchen routing, cancellation, concurrent replay, Order outage and recovery")
 print(json.dumps({"orderId": order["id"], "status": completed["status"], "history": 5, "commands": 3}))

@@ -5,12 +5,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
-import reactor.core.publisher.Mono;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpResponse;
-import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,13 +18,15 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import ru.itmo.highload.catering.catalog.dto.CategoryResponse;
-import ru.itmo.highload.catering.catalog.dto.CreateCategoryRequest;
-import ru.itmo.highload.catering.catalog.dto.UpdateCategoryRequest;
+import reactor.core.publisher.Mono;
+import ru.itmo.highload.catering.catalog.dto.in.CreateCategoryRequest;
+import ru.itmo.highload.catering.catalog.dto.in.UpdateCategoryRequest;
+import ru.itmo.highload.catering.catalog.dto.out.CategoryResponse;
 import ru.itmo.highload.catering.catalog.service.CatalogService;
-import ru.itmo.highload.common.dto.PageResponse;
 import ru.itmo.highload.common.config.StandardApiErrors;
+import ru.itmo.highload.common.dto.out.PageResponse;
 import ru.itmo.highload.common.web.Pagination;
 
 @RestController
@@ -38,6 +39,7 @@ public class CategoryController {
     private final CatalogService catalogService;
 
     @PostMapping
+    @PreAuthorize("hasRole('KITCHEN_MANAGER')")
     @Operation(summary = "Создать категорию")
     @ApiResponse(responseCode = "201", description = "Категория создана")
     @ResponseStatus(HttpStatus.CREATED)
@@ -47,6 +49,7 @@ public class CategoryController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ORGANIZATION_REPRESENTATIVE', 'CLIENT_MANAGER', 'KITCHEN_MANAGER')")
     @Operation(summary = "Получить страницу категорий")
     public Mono<PageResponse<CategoryResponse>> list(
             @RequestParam(defaultValue = "0") int page,
@@ -55,6 +58,7 @@ public class CategoryController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('KITCHEN_MANAGER')")
     @Operation(summary = "Изменить категорию")
     public Mono<CategoryResponse> update(
             @PathVariable UUID id,
@@ -63,6 +67,7 @@ public class CategoryController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('KITCHEN_MANAGER')")
     @Operation(summary = "Удалить неиспользуемую категорию")
     @ApiResponse(responseCode = "204", description = "Категория удалена")
     @ResponseStatus(HttpStatus.NO_CONTENT)

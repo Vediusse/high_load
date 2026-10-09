@@ -253,7 +253,7 @@ class OrderApiIT extends AbstractPostgresIT {
                 .expectHeader().valueEquals("X-Trace-Id", "order-validation")
                 .expectBody().jsonPath("$.code").isEqualTo("VALIDATION_FAILED")
                 .jsonPath("$.fieldErrors[*].field").value(hasItems(
-                        "organizationId", "deliveryPointId", "requestedDeliveryAt"))
+                        "deliveryPointId", "requestedDeliveryAt"))
                 .jsonPath("$.traceId").isEqualTo("order-validation");
         client.post().uri(UriComponentsBuilder.fromPath("/api/v1/orders/{id}/submit").buildAndExpand(orderId).toUriString())
                         .contentType(MediaType.APPLICATION_JSON)

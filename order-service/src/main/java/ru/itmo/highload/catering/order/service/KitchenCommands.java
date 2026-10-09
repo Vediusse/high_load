@@ -8,9 +8,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.itmo.highload.catering.order.dto.in.KitchenCommand;
+import ru.itmo.highload.catering.order.dto.out.OrderResponse;
 import ru.itmo.highload.common.error.ApiException;
-import ru.itmo.highload.catering.order.dto.OrderResponse;
-import ru.itmo.highload.catering.order.dto.KitchenCommand;
 
 @Service
 @RequiredArgsConstructor
@@ -21,6 +21,11 @@ public class KitchenCommands {
 
     @Transactional
     public OrderResponse execute(UUID orderId, KitchenCommand command) {
+        return execute(orderId, command, null);
+    }
+
+    @Transactional
+    public OrderResponse execute(UUID orderId, KitchenCommand command, OrderAccess access) {
         // Lock even before the receipt exists; release only with the aggregate transaction.
         UUID id = command.commandId();
         jdbc.query("select pg_advisory_xact_lock(?)", rs -> {},
@@ -46,9 +51,9 @@ public class KitchenCommands {
                     "Ожидаемый статус не соответствует команде");
         }
         OrderResponse response = switch (command.action()) {
-            case START_COOKING -> orders.startCooking(orderId, command.expectedVersion());
-            case MARK_READY -> orders.markReady(orderId, command.expectedVersion());
-            case COMPLETE -> orders.complete(orderId, command.expectedVersion());
+            case START_COOKING -> orders.startCooking(orderId, command.expectedVersion(), access);
+            case MARK_READY -> orders.markReady(orderId, command.expectedVersion(), access);
+            case COMPLETE -> orders.complete(orderId, command.expectedVersion(), access);
         };
         try {
             jdbc.update("""

@@ -10,9 +10,13 @@ import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import ru.itmo.highload.catering.kitchen.client.dto.*;
-import ru.itmo.highload.catering.kitchen.client.dto.OrderStatus;
-import ru.itmo.highload.common.dto.PageResponse;
+import ru.itmo.highload.catering.kitchen.client.dto.in.KitchenCommand;
+import ru.itmo.highload.catering.kitchen.client.dto.in.OrderStatesRequest;
+import ru.itmo.highload.catering.kitchen.client.dto.out.OrderLineResponse;
+import ru.itmo.highload.catering.kitchen.client.dto.out.OrderResponse;
+import ru.itmo.highload.catering.kitchen.client.dto.out.OrderState;
+import ru.itmo.highload.catering.kitchen.client.dto.out.OrderStatus;
+import ru.itmo.highload.common.dto.out.PageResponse;
 
 // Real HTTP partner for failure injection. Compose checks use the actual Order application.
 final class OrderFixture {
@@ -24,6 +28,7 @@ final class OrderFixture {
     final HttpServer server;
     volatile String mode = "normal";
     volatile String trace;
+    volatile String bearer;
     volatile int delay;
 
     OrderFixture() {
@@ -50,10 +55,13 @@ final class OrderFixture {
     }
     private void handle(HttpExchange exchange) throws IOException {
         try (exchange) {
+            bearer=exchange.getRequestHeaders().getFirst("Authorization");
             calls.incrementAndGet(); trace=exchange.getRequestHeaders().getFirst("X-Trace-Id");
             int delayNow=delay;
             if (delayNow>0) try {Thread.sleep(delayNow);} catch (InterruptedException e) {Thread.currentThread().interrupt();}
             if (mode.equals("down")) {send(exchange,503,Map.of());return;}
+            if (mode.equals("unauthorized")) {error(exchange,401,"AUTHENTICATION_REQUIRED");return;}
+            if (mode.equals("forbidden")) {error(exchange,403,"ACCESS_DENIED");return;}
             if (mode.equals("malformed")) {send(exchange,200,Map.of("id",UUID.randomUUID()));return;}
             if (mode.equals("bad-error")) {send(exchange,409,Map.of("code","UNKNOWN"));return;}
             String path=exchange.getRequestURI().getPath();

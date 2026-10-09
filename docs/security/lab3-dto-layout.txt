@@ -1,0 +1,44 @@
+L3.2 — контроллеры и DTO, 2026-10-09
+
+Контроллеры Identity:
+- AuthenticationController: /api/v1/auth на классе, POST /login — анонимный вход.
+- IdentityController: /api/v1 на классе, /users и /me — защищённые операции.
+Публичные маршруты и JSON сохранены. SecurityConfiguration по-прежнему задаёт
+правила доступа; само разделение Java-классов не заменяет авторизацию.
+
+Направление DTO определяется относительно API-контракта:
+- dto.in: входные запросы, команды, вложенный OrderLineInput, KitchenAction;
+- dto.out: ответы, страницы, снимки и результаты service-методов.
+Для Feign используется та же схема в client.dto.in / client.dto.out: запрос
+к API партнёра относится к in, его ответ — к out, независимо от отправителя.
+В common.dto.out находятся PageResponse, ApiError и FieldErrorResponse.
+
+Всего 53 типа перенесены/размещены по этой структуре в common, Catalog, Order,
+Kitchen и Identity. Четыре вложенных транспортных record вынесены из
+контроллера/Feign-интерфейсов. Entity, внутренние domain value objects,
+параметры конфигурации и private вспомогательные records не являются REST DTO
+и остаются рядом с использующим их кодом. .gitignore сохраняет source dto/out,
+продолжая игнорировать сборочный out. Старых DTO-пакетов и импортов не осталось.
+
+Jwt principal:
+Spring Security Resource Server по умолчанию использует JwtAuthenticationToken
+с Jwt в Authentication.principal; @AuthenticationPrincipal получает этот объект.
+Это стандартный вариант для Bearer JWT, а не самодельная подмена пользователя.
+Identity проверяет подпись/claims, затем ACTIVE/version/roles/organizationId
+по своей БД. В principal не помещается JPA AppUser. /me возвращает отдельный
+CurrentUserResponse с актуальными данными через транзакционный UserService.
+UserDetails не обязателен для Resource Server. Отдельный immutable UserPrincipal
+может понадобиться для единой прикладной модели идентичности при разных
+способах входа или для изоляции application-кода от JWT. Текущий контракт
+использует Bearer JWT и его пересылку в Feign; дополнительная модель не введена.
+
+Официальная документация используемой версии Spring Security 6.5:
+https://docs.spring.io/spring-security/reference/6.5/reactive/oauth2/resource-server/jwt.html
+
+Проверки после переноса:
+- Java 21, ./mvnw -B -ntp clean verify: 124 теста без ошибок и пропусков;
+- Identity: 26 тестов, покрытие строк 96,59%; порог 70% выполнен во всех модулях;
+- проверены анонимный login, 401 на защищённых маршрутах и OpenAPI security.
+- пересобраны все 7 Docker-образов, Compose: 11 healthy;
+- прежний бизнес-сценарий и Identity smoke через Gateway прошли;
+- Newman: 130 запросов, 288 assertions, 0 failures.

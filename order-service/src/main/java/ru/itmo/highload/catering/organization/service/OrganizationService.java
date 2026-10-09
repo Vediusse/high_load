@@ -9,19 +9,19 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.itmo.highload.catering.organization.dto.ActiveOrderParty;
-import ru.itmo.highload.catering.organization.dto.CreateDeliveryPointRequest;
-import ru.itmo.highload.catering.organization.dto.CreateOrganizationRequest;
-import ru.itmo.highload.catering.organization.dto.DeliveryPointResponse;
-import ru.itmo.highload.catering.organization.dto.OrganizationPageResult;
-import ru.itmo.highload.catering.organization.dto.OrganizationResponse;
-import ru.itmo.highload.catering.organization.dto.UpdateDeliveryPointRequest;
-import ru.itmo.highload.catering.organization.dto.UpdateOrganizationRequest;
+import ru.itmo.highload.catering.organization.dto.in.CreateDeliveryPointRequest;
+import ru.itmo.highload.catering.organization.dto.in.CreateOrganizationRequest;
+import ru.itmo.highload.catering.organization.dto.in.UpdateDeliveryPointRequest;
+import ru.itmo.highload.catering.organization.dto.in.UpdateOrganizationRequest;
+import ru.itmo.highload.catering.organization.dto.out.ActiveOrderParty;
+import ru.itmo.highload.catering.organization.dto.out.DeliveryPointResponse;
+import ru.itmo.highload.catering.organization.dto.out.OrganizationPageResult;
+import ru.itmo.highload.catering.organization.dto.out.OrganizationResponse;
 import ru.itmo.highload.catering.organization.entity.DeliveryPoint;
 import ru.itmo.highload.catering.organization.entity.Organization;
 import ru.itmo.highload.catering.organization.repository.DeliveryPointRepository;
 import ru.itmo.highload.catering.organization.repository.OrganizationRepository;
-import ru.itmo.highload.common.dto.PageResponse;
+import ru.itmo.highload.common.dto.out.PageResponse;
 import ru.itmo.highload.common.error.ApiException;
 
 @Service
@@ -39,11 +39,23 @@ public class OrganizationService {
     }
 
     public OrganizationResponse getOrganization(UUID id) {
+        return getOrganization(id, null);
+    }
+
+    public OrganizationResponse getOrganization(UUID id, UUID representativeOrganizationId) {
+        requireRepresentativeOrganization(id, representativeOrganizationId);
         return toResponse(requireOrganization(id));
     }
 
     @Transactional
     public OrganizationResponse updateOrganization(UUID id, UpdateOrganizationRequest request) {
+        return updateOrganization(id, request, null);
+    }
+
+    @Transactional
+    public OrganizationResponse updateOrganization(
+            UUID id, UpdateOrganizationRequest request, UUID representativeOrganizationId) {
+        requireRepresentativeOrganization(id, representativeOrganizationId);
         Organization organization = requireOrganization(id);
         organization.update(request.name(), request.phone());
         return toResponse(organizationRepository.saveAndFlush(organization));
@@ -51,13 +63,25 @@ public class OrganizationService {
 
     @Transactional
     public void deactivateOrganization(UUID id) {
+        deactivateOrganization(id, null);
+    }
+
+    @Transactional
+    public void deactivateOrganization(UUID id, UUID representativeOrganizationId) {
+        requireRepresentativeOrganization(id, representativeOrganizationId);
         Organization organization = requireOrganization(id);
         organization.deactivate();
         organizationRepository.flush();
     }
 
     public OrganizationPageResult listOrganizations(PageRequest pageRequest) {
-        Page<Organization> page = organizationRepository.findAll(pageRequest.withSort(Sort.by("id")));
+        return listOrganizations(pageRequest, null);
+    }
+
+    public OrganizationPageResult listOrganizations(PageRequest pageRequest, UUID representativeOrganizationId) {
+        Page<Organization> page = representativeOrganizationId == null
+                ? organizationRepository.findAll(pageRequest.withSort(Sort.by("id")))
+                : organizationRepository.findById(representativeOrganizationId, pageRequest.withSort(Sort.by("id")));
         PageResponse<OrganizationResponse> body = new PageResponse<>(
                 page.getContent().stream().map(this::toResponse).toList(),
                 page.getNumber(),
@@ -92,6 +116,13 @@ public class OrganizationService {
 
     @Transactional
     public DeliveryPointResponse createDeliveryPoint(UUID organizationId, CreateDeliveryPointRequest request) {
+        return createDeliveryPoint(organizationId, request, null);
+    }
+
+    @Transactional
+    public DeliveryPointResponse createDeliveryPoint(
+            UUID organizationId, CreateDeliveryPointRequest request, UUID representativeOrganizationId) {
+        requireRepresentativeOrganization(organizationId, representativeOrganizationId);
         Organization organization = requireOrganization(organizationId);
         if (!organization.isActive()) {
             throw new ApiException(
@@ -115,6 +146,12 @@ public class OrganizationService {
     }
 
     public PageResponse<DeliveryPointResponse> listDeliveryPoints(UUID organizationId, PageRequest pageRequest) {
+        return listDeliveryPoints(organizationId, pageRequest, null);
+    }
+
+    public PageResponse<DeliveryPointResponse> listDeliveryPoints(
+            UUID organizationId, PageRequest pageRequest, UUID representativeOrganizationId) {
+        requireRepresentativeOrganization(organizationId, representativeOrganizationId);
         requireOrganization(organizationId);
         Slice<DeliveryPoint> slice = deliveryPointRepository.findAllByOrganizationId(organizationId, pageRequest.withSort(Sort.by("id")));
         return new PageResponse<>(
@@ -126,8 +163,15 @@ public class OrganizationService {
 
     @Transactional
     public DeliveryPointResponse updateDeliveryPoint(UUID id, UpdateDeliveryPointRequest request) {
+        return updateDeliveryPoint(id, request, null);
+    }
+
+    @Transactional
+    public DeliveryPointResponse updateDeliveryPoint(
+            UUID id, UpdateDeliveryPointRequest request, UUID representativeOrganizationId) {
         DeliveryPoint deliveryPoint = requireDeliveryPoint(id);
         UUID organizationId = deliveryPoint.getOrganization().getId();
+        requireRepresentativeOrganization(organizationId, representativeOrganizationId);
         String normalizedName = request.name().trim();
         if (deliveryPointRepository.existsByOrganizationIdAndNameAndIdNot(
                 organizationId,
@@ -145,7 +189,13 @@ public class OrganizationService {
 
     @Transactional
     public void deactivateDeliveryPoint(UUID id) {
+        deactivateDeliveryPoint(id, null);
+    }
+
+    @Transactional
+    public void deactivateDeliveryPoint(UUID id, UUID representativeOrganizationId) {
         DeliveryPoint deliveryPoint = requireDeliveryPoint(id);
+        requireRepresentativeOrganization(deliveryPoint.getOrganization().getId(), representativeOrganizationId);
         deliveryPoint.deactivate();
         deliveryPointRepository.flush();
     }
@@ -153,6 +203,12 @@ public class OrganizationService {
     private Organization requireOrganization(UUID id) {
         return organizationRepository.findById(id)
                 .orElseThrow(() -> notFound("Организация", id));
+    }
+
+    private void requireRepresentativeOrganization(UUID id, UUID representativeOrganizationId) {
+        if (representativeOrganizationId != null && !representativeOrganizationId.equals(id)) {
+            throw notFound("Организация", id);
+        }
     }
 
     private DeliveryPoint requireDeliveryPoint(UUID id) {

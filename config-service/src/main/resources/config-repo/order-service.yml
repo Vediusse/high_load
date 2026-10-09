@@ -33,6 +33,8 @@ springdoc:
         url: /v3/api-docs
       - name: Кухня
         url: /v3/api-docs/kitchen
+      - name: Пользователи и вход (Bearer)
+        url: /v3/api-docs/identity
       - name: Каталог
         url: /v3/api-docs/catalog
 

@@ -2,6 +2,7 @@ package ru.itmo.highload.common.error;
 
 import java.util.List;
 import org.springframework.http.HttpStatus;
+import ru.itmo.highload.common.dto.out.FieldErrorResponse;
 
 public class ApiException extends RuntimeException {
 

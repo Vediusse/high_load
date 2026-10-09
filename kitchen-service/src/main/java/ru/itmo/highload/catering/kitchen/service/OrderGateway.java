@@ -14,9 +14,13 @@ import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import ru.itmo.highload.catering.kitchen.client.OrderClient;
-import ru.itmo.highload.catering.kitchen.client.dto.*;
-import ru.itmo.highload.common.dto.PageResponse;
-import ru.itmo.highload.common.error.ApiError;
+import ru.itmo.highload.catering.kitchen.client.dto.in.KitchenCommand;
+import ru.itmo.highload.catering.kitchen.client.dto.in.OrderStatesRequest;
+import ru.itmo.highload.catering.kitchen.client.dto.out.OrderResponse;
+import ru.itmo.highload.catering.kitchen.client.dto.out.OrderState;
+import ru.itmo.highload.catering.kitchen.client.dto.out.OrderStatus;
+import ru.itmo.highload.common.dto.out.ApiError;
+import ru.itmo.highload.common.dto.out.PageResponse;
 import ru.itmo.highload.common.error.ApiException;
 
 @Service
@@ -28,14 +32,14 @@ public class OrderGateway {
     private static final Set<String> BUSINESS_CODES = Set.of("RESOURCE_NOT_FOUND", "ORDER_VERSION_CONFLICT",
             "ORDER_STATUS_CONFLICT", "COMMAND_ID_CONFLICT", "VALIDATION_FAILED", "MALFORMED_JSON");
 
-    public OrderResponse get(UUID id) {
-        return call(() -> validate(client.get(id, trace()), id));
+    public OrderResponse get(UUID id, String bearer) {
+        return call(() -> validate(client.get(id, bearer, trace()), id));
     }
 
-    public List<OrderState> states(Set<UUID> ids) {
+    public List<OrderState> states(Set<UUID> ids, String bearer) {
         if (ids.isEmpty()) return List.of();
         return call(() -> {
-            var result = client.states(new OrderStatesRequest(ids), trace());
+            var result = client.states(new OrderStatesRequest(ids), bearer, trace());
             if (result == null || result.size() != ids.size()) {
                 throw new IllegalStateException("Incomplete order states");
             }
@@ -50,9 +54,9 @@ public class OrderGateway {
         });
     }
 
-    public OrderResponse command(UUID id, KitchenCommand command) {
+    public OrderResponse command(UUID id, KitchenCommand command, String bearer) {
         return call(() -> {
-            OrderResponse result = validate(client.command(id, command, trace()), id);
+            OrderResponse result = validate(client.command(id, command, bearer, trace()), id);
             OrderStatus target = switch (command.action()) {
                 case START_COOKING -> OrderStatus.IN_COOKING;
                 case MARK_READY -> OrderStatus.READY;
@@ -65,9 +69,9 @@ public class OrderGateway {
         });
     }
 
-    public PageResponse<OrderResponse> queue(int page, int size) {
+    public PageResponse<OrderResponse> queue(int page, int size, String bearer) {
         return call(() -> {
-            var result = client.queue(page, size, trace());
+            var result = client.queue(page, size, bearer, trace());
             if (result == null || result.items() == null || result.page() != page || result.size() != size
                     || result.items().size() > size || (result.hasNext() && result.items().size() != size)) {
                 throw new IllegalStateException("Invalid queue response");
@@ -97,6 +101,11 @@ public class OrderGateway {
             try {
                 return request.get();
             } catch (FeignException error) {
+                // A security status is sufficient; the default HTTP transport can omit a 401 body.
+                if (error.status() == 401)
+                    throw new ApiException(HttpStatus.UNAUTHORIZED, "AUTHENTICATION_REQUIRED", "Требуется действительный токен");
+                if (error.status() == 403)
+                    throw new ApiException(HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Недостаточно прав");
                 if (Set.of(400, 404, 409, 422).contains(error.status())) {
                     try {
                         ApiError body = mapper.readValue(error.contentUTF8(), ApiError.class);

@@ -9,6 +9,8 @@
 target/
 build/
 out/
+# Java response DTO packages are source code, not IDE build output.
+!**/src/**/dto/out/
 *.class
 
 # Env

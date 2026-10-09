@@ -1,0 +1,92 @@
+Аудит Identity Service — L3.2, 2026-10-09
+
+Граница: исправление текущего Identity по запросу пользователя. Публичные DTO,
+HTTP-маршруты, роли, таблицы и границы L3.2 сохранены. L3.3 не начата.
+
+Сопоставление со стилем продукта:
+- OrganizationService/OrganizationController: тонкие WebFlux-контроллеры,
+  DTO вместо Entity, транзакционный JPA-сервис и Spring Data репозитории.
+- CatalogGateway/OrderGateway: отдельный класс для сетевого контракта,
+  проверки ответа, Circuit Breaker и отображения ошибок зависимости.
+- Domain entity: Lombok Getter, защищённый JPA-конструктор, бизнес-методы,
+  отсутствие Data/public setters, enum STRING, optimistic version.
+- Response DTO являются обычными records; преобразование Entity выполняется
+  в UserService, как в Order. Проверка текущего пользователя не возвращает Entity
+  из транзакционного сервиса в security-фильтр.
+- Общие компоненты: BlockingRequests, ApiError, TraceFilter, PageResponse,
+  StandardApiErrors. Собственные дубли этих механизмов не вводились.
+- Пакеты: catering/IdentityServiceApplication, catering/config,
+  catering/identity/{controller,service,repository,entity,dto,client,error,security}.
+- Оформление: читаемые методы, отдельные объявления, упорядоченные явные
+  production imports, русские Operation/Tag и общие ответы ошибок в OpenAPI.
+
+Исправленные проблемы:
+1. Identity был оформлен существенно плотнее остального кода, использовал
+   другой корневой пакет и малоинформативное имя Tokens. Структура выровнена,
+   класс переименован в JwtTokenService, обработчик перенесён в error.
+2. UserService смешивал операции пользователя с HTTP/Feign-деталями.
+   Сетевую часть выполняет OrganizationGateway; проверка ограничения организации
+   текущего пользователя остаётся в UserService.
+3. primitive boolean превращал отсутствие active в false и давал 422.
+   Nullable Boolean позволяет отвергнуть неполный ответ как отказ зависимости.
+4. Любой HTTP 404 Order считался отсутствием организации, включая HTML от proxy.
+   Теперь сохраняется только распознанный ApiError с ожидаемым code и полями.
+   401/403/404 сохраняются; некорректный ответ становится 503.
+5. Сетевой вызов не использовал принятый в продукте Circuit Breaker.
+   Добавлен существующий Spring Cloud Resilience4j starter из общего BOM,
+   та же политика Order и тот же fallback-подход. Вызов остаётся на
+   identity-blocking; дополнительный executor/TimeLimiter не включён.
+6. Обработчик конфликта login разбирал текст сообщения БД и мог получить NPE
+   при null message. Теперь проверяется ConstraintViolationException.constraintName;
+   неизвестное ограничение возвращает общий 409 без разбора текста.
+7. Проверка пользователя превращала любую неожиданную ошибку в 503.
+   Теперь 503 применяется к DataAccessException/TransactionException/
+   RejectedExecutionException; ошибки программирования не маскируются.
+8. Явно отключён session request cache вместе с хранением security context.
+   Успешный запрос с JWT не авторизует последующий запрос без JWT.
+9. OpenAPI дополнен summary, tag, StandardApiErrors и схемами 401/403;
+   внутренний validate скрыт, login не требует Bearer в документации.
+
+Проверенные свойства:
+- JPA/Feign/BCrypt выполняются через ленивый BlockingRequests на ограниченном
+  scheduler. В контроллерах и security pipeline нет Reactor.block/subscribe.
+- Пагинированный список сохраняет утверждённый Mono<PageResponse>, не маскирует
+  блокирующую JPA-выборку под Flux. Других списочных Identity API нет.
+- Смена ролей/блокировка отзывают прежние JWT; no-op не меняет версию.
+- Ошибка организации не оставляет частичного пользователя и не изменяет роли,
+  версию или действительность старого JWT при неуспешном назначении роли.
+- Неверная подпись, срок, issuer/audience, claims и неоднозначные Authorization
+  отклоняются; отказ БД не разрешает доступ.
+- Bootstrap сериализуется транзакционным advisory lock и не сбрасывает данные.
+- Миграция не переписана, базы не объединены, пароль/хэш не выходят в REST.
+
+Новые проверки относительно первой версии Identity:
+- Неполные/null/HTML ответы Order и ошибочный HTML 404.
+- CLOSED -> OPEN, отклонение без HTTP-вызова, HALF_OPEN -> CLOSED.
+- Ошибки 401/403/404 не увеличивают счётчик отказов breaker.
+- Ошибка назначения роли сохраняет предыдущую роль/версию/JWT.
+- Bearer authentication не создаёт и не переиспользует HTTP-сессию.
+- Ограничение БД без сообщения не превращает конфликт в 500.
+- OpenAPI содержит ожидаемые операции и схемы ошибок.
+
+Стек соответствует текущему ТЗ: Java 21, Spring Boot/WebFlux/Security,
+JPA/PostgreSQL/Flyway, Feign/Spring Cloud Circuit Breaker/Resilience4j,
+Config/Eureka/Gateway, Lombok, JUnit/Testcontainers/JaCoCo. Новый фреймворк,
+роль, бизнес-функция или архитектурный слой не добавлены. user_role остаётся
+таблицей связи ManyToMany: отдельная Entity без собственных данных не нужна.
+
+Основания: AI/docs/engineering-rules.md; AI/high-load-lab-3; Артефакты/04 и
+раздел безопасности Артефакты/06; утверждённый lab3-contract.txt.
+Spring JWT: https://docs.spring.io/spring-security/reference/reactive/oauth2/resource-server/jwt.html
+Circuit Breaker: https://docs.spring.io/spring-cloud-circuitbreaker/reference/spring-cloud-circuitbreaker-resilience4j/circuit-breaker-properties-configuration.html
+Это проверка согласованного среза, а не заявление о готовности всей лабораторной 3.
+
+Итог проверки: clean verify — 123 теста, 0 failures/errors/skipped; после
+финального переноса mapping common/Identity clean verify — 36 тестов.
+Identity: 22 API/DB + 3 unit, line coverage 96,58%, JaCoCo >=70% выполнен.
+Compose: 11 healthy; финальный smoke Identity и прежний бизнес-сценарий прошли.
+Postman: 130 запросов/288 assertions. Реальный Order outage: 30 ответов 503
+без частичного пользователя; после восстановления пять успешных запросов.
+Smoke ожидает начальную видимость Identity в Gateway до 90s: container health
+не гарантирует мгновенного обновления Eureka/load-balancer cache. Ретраев
+проверяемых операций нет; истечение ожидания завершает скрипт ошибкой.

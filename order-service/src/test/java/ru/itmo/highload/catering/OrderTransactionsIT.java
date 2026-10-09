@@ -14,16 +14,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessException;
 import ru.itmo.highload.catering.CatalogFixture.Dish;
-import ru.itmo.highload.common.error.ApiException;
-import ru.itmo.highload.catering.order.dto.CreateOrderRequest;
-import ru.itmo.highload.catering.order.dto.OrderLineInput;
-import ru.itmo.highload.catering.order.dto.OrderResponse;
-import ru.itmo.highload.catering.order.dto.ReplaceOrderLinesRequest;
+import ru.itmo.highload.catering.order.dto.in.CreateOrderRequest;
+import ru.itmo.highload.catering.order.dto.in.OrderLineInput;
+import ru.itmo.highload.catering.order.dto.in.ReplaceOrderLinesRequest;
+import ru.itmo.highload.catering.order.dto.out.OrderResponse;
 import ru.itmo.highload.catering.order.service.OrderService;
 import ru.itmo.highload.catering.organization.entity.DeliveryPoint;
 import ru.itmo.highload.catering.organization.entity.Organization;
 import ru.itmo.highload.catering.organization.repository.DeliveryPointRepository;
 import ru.itmo.highload.catering.organization.repository.OrganizationRepository;
+import ru.itmo.highload.common.error.ApiException;
 
 @SpringBootTest
 class OrderTransactionsIT extends AbstractPostgresIT {
@@ -44,7 +44,7 @@ class OrderTransactionsIT extends AbstractPostgresIT {
     void largeCatalogReadUsesBoundedBatchesAndFailureCannotPartiallyReplaceOrder() {
         var ids = new java.util.LinkedHashSet<UUID>();
         for (int i = 0; i < 1001; i++) ids.add(dish("Блюдо " + i, "100.00").getId());
-        assertThat(catalogGateway.getActiveDishPrices(ids).keySet()).containsExactlyInAnyOrderElementsOf(ids);
+        assertThat(catalogGateway.getActiveDishPrices(ids, ru.itmo.highload.common.security.TestTokens.bearer()).keySet()).containsExactlyInAnyOrderElementsOf(ids);
         assertThat(catalog.batchSizes).containsExactly(1000, 1);
 
         var draft = createDraft(fixture());
@@ -53,7 +53,7 @@ class OrderTransactionsIT extends AbstractPostgresIT {
         missingLast.add(new OrderLineInput(UUID.randomUUID(), 1));
         catalog.batchSizes.clear();
         assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(),
-                new ReplaceOrderLinesRequest(draft.version(), missingLast)))
+                new ReplaceOrderLinesRequest(draft.version(), missingLast), ru.itmo.highload.common.security.TestTokens.bearer()))
                 .isInstanceOfSatisfying(ApiException.class, error ->
                         assertThat(error.getCode()).isEqualTo("RESOURCE_NOT_FOUND"));
         assertThat(catalog.batchSizes).containsExactly(1000, 1);
@@ -71,7 +71,7 @@ class OrderTransactionsIT extends AbstractPostgresIT {
                 draft.id(),
                 new ReplaceOrderLinesRequest(
                         draft.version(),
-                        List.of(new OrderLineInput(oldDish.getId(), 2))));
+                        List.of(new OrderLineInput(oldDish.getId(), 2))), ru.itmo.highload.common.security.TestTokens.bearer());
 
         UUID missingDish = UUID.randomUUID();
         assertThatThrownBy(() -> orderService.replaceDraftLines(
@@ -80,7 +80,7 @@ class OrderTransactionsIT extends AbstractPostgresIT {
                                 initial.version(),
                                 List.of(
                                         new OrderLineInput(newDish.getId(), 1),
-                                        new OrderLineInput(missingDish, 1)))))
+                                        new OrderLineInput(missingDish, 1))), ru.itmo.highload.common.security.TestTokens.bearer()))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getCode()).isEqualTo("RESOURCE_NOT_FOUND"));
 
@@ -105,10 +105,10 @@ class OrderTransactionsIT extends AbstractPostgresIT {
                         draft.version(),
                         List.of(
                                 new OrderLineInput(activeDish.getId(), 1),
-                                new OrderLineInput(laterInactiveDish.getId(), 2))));
+                                new OrderLineInput(laterInactiveDish.getId(), 2))), ru.itmo.highload.common.security.TestTokens.bearer());
         laterInactiveDish.deactivate();
 
-        assertThatThrownBy(() -> orderService.submit(draft.id(), withLines.version()))
+        assertThatThrownBy(() -> orderService.submit(draft.id(), withLines.version(), ru.itmo.highload.common.security.TestTokens.bearer()))
                 .isInstanceOfSatisfying(ApiException.class, exception ->
                         assertThat(exception.getCode()).isEqualTo("DISH_INACTIVE"));
 
@@ -135,10 +135,10 @@ class OrderTransactionsIT extends AbstractPostgresIT {
                 draft.id(),
                 new ReplaceOrderLinesRequest(
                         draft.version(),
-                        List.of(new OrderLineInput(dish.getId(), 2))));
+                        List.of(new OrderLineInput(dish.getId(), 2))), ru.itmo.highload.common.security.TestTokens.bearer());
 
         dish.update("Борщ фирменный", "", new BigDecimal("200.00"), Set.of());
-        OrderResponse submitted = orderService.submit(draft.id(), withLines.version());
+        OrderResponse submitted = orderService.submit(draft.id(), withLines.version(), ru.itmo.highload.common.security.TestTokens.bearer());
         dish.update("Борщ новый", "", new BigDecimal("300.00"), Set.of());
 
         OrderResponse unchanged = orderService.getOrder(draft.id());
@@ -160,8 +160,8 @@ class OrderTransactionsIT extends AbstractPostgresIT {
                 draft.id(),
                 new ReplaceOrderLinesRequest(
                         draft.version(),
-                        List.of(new OrderLineInput(dish.getId(), 2))));
-        OrderResponse submitted = orderService.submit(draft.id(), withLines.version());
+                        List.of(new OrderLineInput(dish.getId(), 2))), ru.itmo.highload.common.security.TestTokens.bearer());
+        OrderResponse submitted = orderService.submit(draft.id(), withLines.version(), ru.itmo.highload.common.security.TestTokens.bearer());
 
         jdbcTemplate.execute("""
                 ALTER TABLE order_status_history
@@ -192,12 +192,12 @@ class OrderTransactionsIT extends AbstractPostgresIT {
         Dish dish = dish("Борщ", "180.00");
         OrderResponse draft = createDraft(fixture);
         OrderResponse filled = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
-                draft.version(), List.of(new OrderLineInput(dish.getId(), 2))));
+                draft.version(), List.of(new OrderLineInput(dish.getId(), 2))), ru.itmo.highload.common.security.TestTokens.bearer());
         var breaker = breakers.circuitBreaker("catalog");
         breaker.reset();
         catalog.failureStatus = 503;
         for (int attempt = 0; attempt < breaker.getCircuitBreakerConfig().getMinimumNumberOfCalls(); attempt++) {
-            assertThatThrownBy(() -> orderService.submit(filled.id(), filled.version()))
+            assertThatThrownBy(() -> orderService.submit(filled.id(), filled.version(), ru.itmo.highload.common.security.TestTokens.bearer()))
                     .isInstanceOfSatisfying(ApiException.class, error -> {
                         assertThat(error.getStatus().value()).isEqualTo(503);
                         assertThat(error.getCode()).isEqualTo("DEPENDENCY_UNAVAILABLE");
@@ -206,20 +206,20 @@ class OrderTransactionsIT extends AbstractPostgresIT {
         assertThat(breakers.circuitBreaker("catalog").getState().name()).isEqualTo("OPEN");
         int sent = catalog.requests.get();
         assertThatThrownBy(() -> orderService.replaceDraftLines(filled.id(), new ReplaceOrderLinesRequest(
-                filled.version(), List.of(new OrderLineInput(dish.getId(), 3))))).isInstanceOf(ApiException.class);
+                filled.version(), List.of(new OrderLineInput(dish.getId(), 3))), ru.itmo.highload.common.security.TestTokens.bearer())).isInstanceOf(ApiException.class);
         assertThat(catalog.requests.get()).isEqualTo(sent);
         OrderResponse unchanged = orderService.getOrder(filled.id());
         assertThat(unchanged).isEqualTo(filled);
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM order_status_history", Long.class)).isZero();
         catalog.failureStatus = 0;
         org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(8)).ignoreException(ApiException.class).untilAsserted(() -> {
-            assertThat(orderService.submit(filled.id(), filled.version()).status().name()).isEqualTo("SUBMITTED");
+            assertThat(orderService.submit(filled.id(), filled.version(), ru.itmo.highload.common.security.TestTokens.bearer()).status().name()).isEqualTo("SUBMITTED");
         });
         // Complete the remaining successful probes in the half-open window.
         for (int probe = 1; probe < breaker.getCircuitBreakerConfig().getPermittedNumberOfCallsInHalfOpenState(); probe++) {
             var another = createDraft(fixture);
             orderService.replaceDraftLines(another.id(), new ReplaceOrderLinesRequest(another.version(),
-                    List.of(new OrderLineInput(dish.getId(), 1))));
+                    List.of(new OrderLineInput(dish.getId(), 1))), ru.itmo.highload.common.security.TestTokens.bearer());
         }
         assertThat(breakers.circuitBreaker("catalog").getState().name()).isEqualTo("CLOSED");
     }
@@ -233,11 +233,11 @@ class OrderTransactionsIT extends AbstractPostgresIT {
         catalog.failureStatus = 503;
         int probes = breaker.getCircuitBreakerConfig().getPermittedNumberOfCallsInHalfOpenState();
         for (int i = 0; i < probes; i++) {
-            assertThatThrownBy(() -> catalogGateway.getActiveDishPrices(ids)).isInstanceOf(ApiException.class);
+            assertThatThrownBy(() -> catalogGateway.getActiveDishPrices(ids, ru.itmo.highload.common.security.TestTokens.bearer())).isInstanceOf(ApiException.class);
         }
         assertThat(breaker.getState().name()).isEqualTo("OPEN");
         assertThat(catalog.requests.get()).isEqualTo(probes);
-        assertThatThrownBy(() -> catalogGateway.getActiveDishPrices(ids)).isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> catalogGateway.getActiveDishPrices(ids, ru.itmo.highload.common.security.TestTokens.bearer())).isInstanceOf(ApiException.class);
         assertThat(catalog.requests.get()).isEqualTo(probes);
     }
 
@@ -276,12 +276,12 @@ class OrderTransactionsIT extends AbstractPostgresIT {
         var command = new ReplaceOrderLinesRequest(draft.version(), List.of(new OrderLineInput(dish.getId(), 1)));
         catalog.delayMillis = 3000;
         long start = System.nanoTime();
-        assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), command))
+        assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), command, ru.itmo.highload.common.security.TestTokens.bearer()))
                 .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getStatus().value()).isEqualTo(503));
         assertThat(java.time.Duration.ofNanos(System.nanoTime() - start).toMillis()).isBetween(1800L, 5000L);
         catalog.delayMillis = 0;
         catalog.incomplete = true;
-        assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), command))
+        assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), command, ru.itmo.highload.common.security.TestTokens.bearer()))
                 .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getStatus().value()).isEqualTo(503));
         assertThat(orderService.getOrder(draft.id())).isEqualTo(draft);
         assertThat(catalog.requests.get()).isEqualTo(2);
@@ -293,7 +293,7 @@ class OrderTransactionsIT extends AbstractPostgresIT {
         OrderResponse draft = createDraft(fixture);
         for (int attempt = 0; attempt < breakers.circuitBreaker("catalog").getCircuitBreakerConfig().getMinimumNumberOfCalls() + 1; attempt++) {
             assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
-                    draft.version(), List.of(new OrderLineInput(UUID.randomUUID(), 1)))))
+                    draft.version(), List.of(new OrderLineInput(UUID.randomUUID(), 1))), ru.itmo.highload.common.security.TestTokens.bearer()))
                     .isInstanceOfSatisfying(ApiException.class, error -> assertThat(error.getStatus().value()).isEqualTo(404));
         }
         assertThat(breakers.circuitBreaker("catalog").getState().name()).isEqualTo("CLOSED");
@@ -304,11 +304,28 @@ class OrderTransactionsIT extends AbstractPostgresIT {
         try {
             Dish dish = dish("Борщ", "180.00");
             orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(draft.version(),
-                    List.of(new OrderLineInput(dish.getId(), 1))));
+                    List.of(new OrderLineInput(dish.getId(), 1))), ru.itmo.highload.common.security.TestTokens.bearer());
             assertThat(catalog.lastTrace).isEqualTo("order-catalog-trace");
         } finally {
             org.slf4j.MDC.remove("traceId");
         }
+    }
+
+    @Test
+    void downstreamSecurityFailurePreservesStatusAndCannotChangeDraft() {
+        OrderResponse draft = createDraft(fixture());
+        String bearer = ru.itmo.highload.common.security.TestTokens.bearer();
+        var request = new ReplaceOrderLinesRequest(draft.version(),
+                List.of(new OrderLineInput(UUID.randomUUID(), 1)));
+        for (int status : List.of(401, 403)) {
+            catalog.failureStatus = status;
+            assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), request, bearer))
+                    .isInstanceOfSatisfying(ApiException.class, error ->
+                            assertThat(error.getStatus().value()).isEqualTo(status));
+            assertThat(catalog.lastBearer).isEqualTo(bearer);
+            assertThat(orderService.getOrder(draft.id())).isEqualTo(draft);
+        }
+        assertThat(breakers.circuitBreaker("catalog").getMetrics().getNumberOfBufferedCalls()).isZero();
     }
 
     @Test
@@ -318,11 +335,11 @@ class OrderTransactionsIT extends AbstractPostgresIT {
         Dish second = dish("Горячее", "200.00");
         Dish third = dish("Салат", "100.00");
         OrderResponse initial = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
-                draft.version(), List.of(new OrderLineInput(first.getId(), 1))));
+                draft.version(), List.of(new OrderLineInput(first.getId(), 1))), ru.itmo.highload.common.security.TestTokens.bearer());
         UUID lineId = initial.lines().getFirst().id();
 
         OrderResponse increased = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
-                initial.version(), List.of(new OrderLineInput(first.getId(), 5))));
+                initial.version(), List.of(new OrderLineInput(first.getId(), 5))), ru.itmo.highload.common.security.TestTokens.bearer());
         assertThat(increased.totalAmount()).isEqualByComparingTo("500.00");
         assertThat(increased.version()).isEqualTo(initial.version() + 1);
         assertThat(increased.lines()).singleElement().satisfies(line -> {
@@ -332,13 +349,13 @@ class OrderTransactionsIT extends AbstractPostgresIT {
 
         OrderResponse sameTotal = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
                 increased.version(), List.of(new OrderLineInput(first.getId(), 3),
-                        new OrderLineInput(second.getId(), 1))));
+                        new OrderLineInput(second.getId(), 1))), ru.itmo.highload.common.security.TestTokens.bearer());
         assertThat(sameTotal.totalAmount()).isEqualByComparingTo("500.00");
         assertThat(sameTotal.version()).isEqualTo(increased.version() + 1);
 
         OrderResponse swapped = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
                 sameTotal.version(), List.of(new OrderLineInput(first.getId(), 1),
-                        new OrderLineInput(second.getId(), 2))));
+                        new OrderLineInput(second.getId(), 2))), ru.itmo.highload.common.security.TestTokens.bearer());
         assertThat(swapped.totalAmount()).isEqualByComparingTo("500.00");
         assertThat(swapped.version()).isEqualTo(sameTotal.version() + 1);
         assertThat(swapped.lines().stream().map(line -> line.id()).toList())
@@ -347,13 +364,13 @@ class OrderTransactionsIT extends AbstractPostgresIT {
         assertThat(persisted.version()).isEqualTo(swapped.version());
         assertThat(persisted.lines()).containsExactlyInAnyOrderElementsOf(swapped.lines());
         assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
-                sameTotal.version(), List.of(new OrderLineInput(first.getId(), 9)))))
+                sameTotal.version(), List.of(new OrderLineInput(first.getId(), 9))), ru.itmo.highload.common.security.TestTokens.bearer()))
                 .isInstanceOfSatisfying(ApiException.class, error ->
                         assertThat(error.getCode()).isEqualTo("ORDER_VERSION_CONFLICT"));
 
         OrderResponse replaced = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
                 swapped.version(), List.of(new OrderLineInput(first.getId(), 2),
-                        new OrderLineInput(third.getId(), 3))));
+                        new OrderLineInput(third.getId(), 3))), ru.itmo.highload.common.security.TestTokens.bearer());
         assertThat(replaced.totalAmount()).isEqualByComparingTo("500.00");
         assertThat(replaced.version()).isEqualTo(swapped.version() + 1);
         assertThat(replaced.lines()).extracting(line -> line.dishId())
@@ -362,7 +379,7 @@ class OrderTransactionsIT extends AbstractPostgresIT {
                 .orElseThrow().id()).isEqualTo(lineId);
 
         OrderResponse cleared = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
-                replaced.version(), List.of()));
+                replaced.version(), List.of()), ru.itmo.highload.common.security.TestTokens.bearer());
         assertThat(cleared.lines()).isEmpty();
         assertThat(cleared.totalAmount()).isEqualByComparingTo("0.00");
         assertThat(cleared.version()).isEqualTo(replaced.version() + 1);
@@ -377,12 +394,12 @@ class OrderTransactionsIT extends AbstractPostgresIT {
         Dish first = dish("Суп", "100.00");
         Dish second = dish("Горячее", "200.00");
         OrderResponse initial = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
-                draft.version(), List.of(new OrderLineInput(first.getId(), 1))));
+                draft.version(), List.of(new OrderLineInput(first.getId(), 1))), ru.itmo.highload.common.security.TestTokens.bearer());
         jdbcTemplate.execute("ALTER TABLE order_line ADD CONSTRAINT ck_test_quantity CHECK (quantity < 5)");
         try {
             assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
                     initial.version(), List.of(new OrderLineInput(first.getId(), 5),
-                            new OrderLineInput(second.getId(), 1)))))
+                            new OrderLineInput(second.getId(), 1))), ru.itmo.highload.common.security.TestTokens.bearer()))
                     .isInstanceOf(DataAccessException.class);
         } finally {
             jdbcTemplate.execute("ALTER TABLE order_line DROP CONSTRAINT ck_test_quantity");

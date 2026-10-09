@@ -14,10 +14,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import ru.itmo.highload.catering.CatalogFixture.Dish;
-import ru.itmo.highload.catering.order.dto.CreateOrderRequest;
-import ru.itmo.highload.catering.order.dto.OrderLineInput;
-import ru.itmo.highload.catering.order.dto.OrderResponse;
-import ru.itmo.highload.catering.order.dto.ReplaceOrderLinesRequest;
+import ru.itmo.highload.catering.order.dto.in.CreateOrderRequest;
+import ru.itmo.highload.catering.order.dto.in.OrderLineInput;
+import ru.itmo.highload.catering.order.dto.in.ReplaceOrderLinesRequest;
+import ru.itmo.highload.catering.order.dto.out.OrderResponse;
 import ru.itmo.highload.catering.order.entity.OrderLine;
 import ru.itmo.highload.catering.order.repository.CorporateOrderRepository;
 import ru.itmo.highload.catering.order.service.OrderService;
@@ -64,10 +64,10 @@ class OrderPersistenceIT extends AbstractPostgresIT {
                 draft.id(),
                 new ReplaceOrderLinesRequest(
                         draft.version(),
-                        List.of(new OrderLineInput(dish.getId(), 2))));
+                        List.of(new OrderLineInput(dish.getId(), 2))), ru.itmo.highload.common.security.TestTokens.bearer());
         assertThat(orderRepository.findDetailedById(draft.id())).hasValueSatisfying(order ->
                 assertThat(order.getLines()).extracting(OrderLine::getDishId).containsExactly(dish.getId()));
-        orderService.submit(draft.id(), withLines.version());
+        orderService.submit(draft.id(), withLines.version(), ru.itmo.highload.common.security.TestTokens.bearer());
 
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT status FROM corporate_order WHERE id = ?",

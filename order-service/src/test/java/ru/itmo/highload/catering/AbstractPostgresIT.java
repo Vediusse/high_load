@@ -7,6 +7,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 
+@org.springframework.context.annotation.Import(ru.itmo.highload.common.security.InternalSecurityTestConfiguration.class)
 abstract class AbstractPostgresIT {
 
     protected static final CatalogFixture catalog = new CatalogFixture();
@@ -20,6 +21,7 @@ abstract class AbstractPostgresIT {
 
     @DynamicPropertySource
     static void configurePostgres(DynamicPropertyRegistry registry) {
+        ru.itmo.highload.common.security.TestTokens.register(registry);
         registry.add("clients.catalog.url", catalog::url);
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);

@@ -16,19 +16,19 @@ import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import ru.itmo.highload.common.error.ApiException;
 import ru.itmo.highload.catering.CatalogFixture.Dish;
-import ru.itmo.highload.catering.order.dto.CreateOrderRequest;
-import ru.itmo.highload.catering.order.dto.OrderLineInput;
-import ru.itmo.highload.catering.order.dto.OrderResponse;
-import ru.itmo.highload.catering.order.dto.RejectOrderRequest;
-import ru.itmo.highload.catering.order.dto.ReplaceOrderLinesRequest;
-import ru.itmo.highload.catering.order.dto.UpdateOrderDetailsRequest;
+import ru.itmo.highload.catering.order.dto.in.CreateOrderRequest;
+import ru.itmo.highload.catering.order.dto.in.OrderLineInput;
+import ru.itmo.highload.catering.order.dto.in.RejectOrderRequest;
+import ru.itmo.highload.catering.order.dto.in.ReplaceOrderLinesRequest;
+import ru.itmo.highload.catering.order.dto.in.UpdateOrderDetailsRequest;
+import ru.itmo.highload.catering.order.dto.out.OrderResponse;
 import ru.itmo.highload.catering.order.service.OrderService;
 import ru.itmo.highload.catering.organization.entity.DeliveryPoint;
 import ru.itmo.highload.catering.organization.entity.Organization;
 import ru.itmo.highload.catering.organization.repository.DeliveryPointRepository;
 import ru.itmo.highload.catering.organization.repository.OrganizationRepository;
+import ru.itmo.highload.common.error.ApiException;
 
 @SpringBootTest
 class OrderOptimisticLockIT extends AbstractPostgresIT {
@@ -100,8 +100,8 @@ class OrderOptimisticLockIT extends AbstractPostgresIT {
                 draft.id(),
                 new ReplaceOrderLinesRequest(
                         draft.version(),
-                        List.of(new OrderLineInput(dish.getId(), 2))));
-        OrderResponse submitted = orderService.submit(draft.id(), withLines.version());
+                        List.of(new OrderLineInput(dish.getId(), 2))), ru.itmo.highload.common.security.TestTokens.bearer());
+        OrderResponse submitted = orderService.submit(draft.id(), withLines.version(), ru.itmo.highload.common.security.TestTokens.bearer());
 
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);

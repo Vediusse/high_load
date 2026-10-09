@@ -7,6 +7,16 @@ spring:
             connect-timeout: 1000
             response-timeout: 10s
           routes:
+            - id: identity-api
+              uri: lb://identity-service
+              predicates:
+                - Path=/api/v1/auth/**,/api/v1/users/**,/api/v1/me
+            - id: identity-docs
+              uri: lb://identity-service
+              predicates:
+                - Path=/v3/api-docs/identity
+              filters:
+                - SetPath=/v3/api-docs
             - id: kitchen-commands
               uri: lb://kitchen-service
               predicates:

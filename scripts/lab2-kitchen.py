@@ -14,19 +14,25 @@ base = sys.argv[2] if len(sys.argv) > 2 else "http://localhost:18080"
 compose = ["docker", "compose", "-p", project]
 
 
-def api(method, path, data=None, expected=200):
+def api(method, path, data=None, expected=200, wait_for_recovery=False):
     request = urllib.request.Request(base + "/api/v1" + path, method=method,
         data=None if data is None else json.dumps(data).encode(),
         headers={"Content-Type": "application/json", "X-Trace-Id": "kitchen-compose"})
-    try:
-        response = urllib.request.urlopen(request, timeout=15)
-    except urllib.error.HTTPError as error:
-        response = error
-    with response:
-        body = json.load(response)
-        assert response.status == expected, (path, response.status, body)
-        assert response.headers["X-Trace-Id"] == "kitchen-compose"
-        return body
+    deadline = time.monotonic() + 120
+    while True:
+        try:
+            response = urllib.request.urlopen(request, timeout=15)
+        except urllib.error.HTTPError as error:
+            response = error
+        with response:
+            body = json.load(response)
+            assert response.headers["X-Trace-Id"] == "kitchen-compose"
+            recovering = (wait_for_recovery and response.status == 503
+                          and body.get("code") == "DEPENDENCY_UNAVAILABLE")
+            if not recovering or time.monotonic() >= deadline:
+                assert response.status == expected, (path, response.status, body)
+                return body
+        time.sleep(2)
 
 
 def internal(path="/internal/v1/kitchen/tasks?size=50"):
@@ -48,6 +54,8 @@ def start(service):
 
 
 suffix = str(uuid.uuid4())[:8]
+# A preceding outage check may have restarted Catalog before Gateway refreshed Eureka.
+api("GET", "/dishes?limit=1", wait_for_recovery=True)
 org = api("POST", "/organizations", {"name": "Кухня " + suffix, "phone": "+79991234567"}, 201)
 point = api("POST", f"/organizations/{org['id']}/delivery-points", {"name": "Офис", "address": "Адрес",
     "contactName": "Иван", "contactPhone": "+79991234567"}, 201)
@@ -115,8 +123,11 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
     responses = list(pool.map(lambda _: api("POST", f"/orders/{order['id']}/start-cooking",
         {"expectedVersion": order["version"]}), range(4)))
 assert all(response == cooking for response in responses)
-ready = api("POST", f"/orders/{order['id']}/mark-ready", {"expectedVersion": cooking["version"]})
-completed = api("POST", f"/orders/{order['id']}/complete", {"expectedVersion": ready["version"]})
+# The first successful recovery call can still open the breaker when the failure
+# window reaches its minimum size. Retry only explicit dependency-unavailable
+# responses, keeping the same version for these idempotent kitchen commands.
+ready = api("POST", f"/orders/{order['id']}/mark-ready", {"expectedVersion": cooking["version"]}, wait_for_recovery=True)
+completed = api("POST", f"/orders/{order['id']}/complete", {"expectedVersion": ready["version"]}, wait_for_recovery=True)
 assert api("POST", f"/orders/{order['id']}/start-cooking", {"expectedVersion": order["version"]}) == cooking
 assert sql("kitchen-postgres", f"select status from kitchen_task where order_id='{order['id']}'") == "COMPLETED"
 assert sql("order-postgres", f"select count(*) from kitchen_command where order_id='{order['id']}'") == "3"

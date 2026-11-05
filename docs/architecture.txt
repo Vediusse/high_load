@@ -145,11 +145,16 @@ KitchenTask — восстанавливаемая проекция. Состо�
 
 Семь приложений и четыре PostgreSQL поднимаются штатным compose.yaml (L3.2). Наружу открыт
 только Gateway; Config, Eureka, бизнес-сервисы и БД доступны внутри Docker-сети.
-У всех девяти контейнеров есть health checks. Конфигурация приложения централизована
-в config-service/src/main/resources/config-repo. Native/classpath backend Config
-Server — выбранный законченный способ хранения конфигурации для лаборатории.
-Его изменение применяется через пересборку Config Server и перезапуск клиентов;
-динамический refresh настроек не заявлен.
+У всех одиннадцати контейнеров есть health checks. Конфигурация централизована
+в отдельном Git-репозитории https://github.com/Vediusse/high_load_configs.
+В корне application.yml с общими настройками, в <service-name>/application.yml —
+настройки сервиса. Git backend Config Server ищет файлы через search-paths:
+'{application}'; имя application берётся из spring.application.name клиента,
+profile — из его активного профиля (сейчас default), label — ветка/тег Git (main).
+CONFIG_REPO_URI и CONFIG_REPO_LABEL позволяют выбрать репозиторий и label.
+clone-on-start обнаруживает недоступный репозиторий при запуске Config Server.
+После commit/push настроек достаточно перезапустить нужных клиентов;
+пересборка JAR/образа Config Server не нужна. Динамический refresh не настроен.
 
 Eureka работает одиночным сервером: hostname совпадает с хостом собственного
 defaultZone, prefer-ip-address отключён только у discovery-service. Это исключает

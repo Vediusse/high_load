@@ -37,7 +37,8 @@ OrganizationGateway по образцу CatalogGateway/OrderGateway. Испол�
 Resilience4j: окно 50, минимум 20, пороги 50%, OPEN 30s, пять HALF_OPEN проб.
 Дополнительные TimeLimiter и executor отключены: Feign уже работает на
 BlockingRequests с connect/read timeout 1s/2s. Параметры и дефолты описаны
-в config-repo/identity-service.yml. Fallback возвращает 503 без фиктивных данных;
+в high_load_configs/identity-service/application.yml (отдельный Git-репозиторий).
+Fallback возвращает 503 без фиктивных данных;
 распознанные 401/403/404 с ApiError сохраняются и не портят статистику breaker.
 Пустое/некорректное тело, отсутствие active и HTML вместо ApiError дают 503.
 Это явно временный маршрут L3.2; перед закрытием Order в L3.3 он меняется

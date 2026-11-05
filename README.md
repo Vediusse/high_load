@@ -118,8 +118,9 @@ custom-фрагментов, классов-обёрток и `R2dbcEntityTempla
 
 ### Circuit breaker
 
-Политика для связей заказ → каталог и кухня → заказ находится в
-`config-service/src/main/resources/config-repo/{order-service,kitchen-service}.yml`:
+Политика для связей заказ → каталог и кухня → заказ находится в отдельном
+[репозитории конфигурации](https://github.com/Vediusse/high_load_configs):
+`order-service/application.yml` и `kitchen-service/application.yml`.
 
 - окно последних 50 вызовов, минимум 20 учитываемых вызовов;
 - открытие при 50% ошибок либо 50% медленных вызовов (дольше 1500 мс);
@@ -137,3 +138,23 @@ custom-фрагментов, классов-обёрток и `R2dbcEntityTempla
 В интеграционных тестах только пауза OPEN сокращена до одной секунды; проверяются
 отказ без сетевого вызова, успешное восстановление, повторный отказ проб, медленные
 ответы и ограниченное ожидание в HALF_OPEN.
+
+### Config Server
+
+Конфигурации хранятся отдельно от кода в [high_load_configs](https://github.com/Vediusse/high_load_configs).
+Config Server читает Git-репозиторий: `application.yml` в корне содержит общие настройки,
+`<spring.application.name>/application.yml` — настройки конкретного сервиса.
+Файлы `application-<profile>.yml` в тех же папках могут переопределять настройки профиля;
+сейчас сервисы используют профиль `default`. Это структура из
+[примера преподавателя](https://github.com/leomag/configs-repo).
+
+Адрес репозитория задаётся `CONFIG_REPO_URI`, ветка/тег — `CONFIG_REPO_LABEL` (по умолчанию `main`).
+Config Server клонирует репозиторий при старте; ошибка доступа останавливает запуск.
+Клиенты получают настройки через `spring.config.import=configserver:...` по имени сервиса.
+Например, внутри Compose `http://config-service:8888/order-service/default/main`
+возвращает общие и заказные настройки, а поле `version` — SHA коммита конфигурации.
+
+После commit/push конфигурации перезапустите нужный сервис, например
+`docker compose restart order-service`: пересборка образов не нужна.
+Автоматический refresh работающих клиентов не настроен.
+Пароли и JWT-ключи остаются в окружении сервисов, в Git хранятся только `${...}`-ссылки.

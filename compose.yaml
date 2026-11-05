@@ -21,6 +21,8 @@ services:
       dockerfile: config-service/Dockerfile
     environment:
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60
+      CONFIG_REPO_URI: ${CONFIG_REPO_URI:-https://github.com/Vediusse/high_load_configs.git}
+      CONFIG_REPO_LABEL: ${CONFIG_REPO_LABEL:-main}
     healthcheck:
       <<: *health
       test: ["CMD-SHELL", "wget -qO- http://localhost:8888/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]

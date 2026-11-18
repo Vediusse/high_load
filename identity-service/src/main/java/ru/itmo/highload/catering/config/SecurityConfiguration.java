@@ -36,9 +36,9 @@ import org.springframework.security.web.server.context.NoOpServerSecurityContext
 import org.springframework.security.web.server.savedrequest.NoOpServerRequestCache;
 import org.springframework.transaction.TransactionException;
 import reactor.core.publisher.Mono;
-import ru.itmo.highload.catering.identity.security.JwtTokenService;
-import ru.itmo.highload.catering.identity.security.SecurityErrors;
-import ru.itmo.highload.catering.identity.service.UserService;
+import ru.itmo.highload.catering.identity.adapters.out.security.JwtTokenService;
+import ru.itmo.highload.catering.identity.adapters.out.security.SecurityErrors;
+import ru.itmo.highload.catering.identity.application.UserService;
 import ru.itmo.highload.common.web.BlockingRequests;
 
 @Configuration
@@ -132,13 +132,15 @@ public class SecurityConfiguration {
         return token -> blocking.<AbstractAuthenticationToken>call(() -> {
             if (!("RS256".equals(token.getHeaders().get("alg"))
                     && InternalJwt.TYPE.equals(token.getHeaders().get("typ")))) {
-                users.validateCurrent(token);
+                users.validateCurrent(ru.itmo.highload.catering.identity.adapters.in.rest.IdentityActors.claims(token));
             }
             var authorities = JwtTokenService.roles(token).stream()
                     .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
                     .toList();
             return new JwtAuthenticationToken(token, authorities);
-        }).onErrorMap(error -> error instanceof DataAccessException
+        }).onErrorMap(ru.itmo.highload.catering.identity.domain.InvalidIdentityToken.class,
+                error -> new org.springframework.security.authentication.BadCredentialsException("Invalid token"))
+          .onErrorMap(error -> error instanceof DataAccessException
                         || error instanceof TransactionException || error instanceof RejectedExecutionException,
                 error -> new OAuth2AuthenticationException(
                         new OAuth2Error("temporarily_unavailable"), "Identity unavailable"));

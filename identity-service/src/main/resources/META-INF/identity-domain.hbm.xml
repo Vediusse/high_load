@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hibernate-mapping xmlns="http://www.hibernate.org/xsd/hibernate-mapping" default-access="field">
+  <class name="ru.itmo.highload.catering.identity.domain.model.AppUser" table="app_user">
+    <id name="id" type="uuid"><generator class="assigned"/></id>
+    <version name="version" type="long"/>
+    <property name="login" type="string" length="64" not-null="true"/>
+    <property name="passwordHash" type="string" column="password_hash" length="100" not-null="true"/>
+    <property name="status" column="status" length="16" not-null="true">
+      <type name="org.hibernate.type.EnumType"><param name="enumClass">ru.itmo.highload.catering.identity.domain.model.UserStatus</param><param name="useNamed">true</param></type>
+    </property>
+    <property name="organizationId" type="uuid" column="organization_id"/>
+    <property name="createdAt" type="java.time.Instant" column="created_at" not-null="true"/>
+    <set name="roles" table="user_role" batch-size="50">
+      <key column="user_id"/>
+      <many-to-many class="ru.itmo.highload.catering.identity.domain.model.Role" column="role_id"/>
+    </set>
+  </class>
+  <class name="ru.itmo.highload.catering.identity.domain.model.Role" table="role">
+    <id name="id" type="short"><generator class="assigned"/></id>
+    <property name="code" length="40" not-null="true" unique="true">
+      <type name="org.hibernate.type.EnumType"><param name="enumClass">ru.itmo.highload.catering.identity.domain.model.RoleCode</param><param name="useNamed">true</param></type>
+    </property>
+  </class>
+</hibernate-mapping>

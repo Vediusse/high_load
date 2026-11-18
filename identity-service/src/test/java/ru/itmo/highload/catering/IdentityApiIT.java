@@ -26,11 +26,11 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.*;
 import ru.itmo.highload.catering.config.JwtProperties;
-import ru.itmo.highload.catering.identity.dto.in.CreateUserRequest;
-import ru.itmo.highload.catering.identity.dto.in.LoginRequest;
-import ru.itmo.highload.catering.identity.dto.out.TokenResponse;
-import ru.itmo.highload.catering.identity.entity.RoleCode;
-import ru.itmo.highload.catering.identity.service.UserService;
+import ru.itmo.highload.catering.identity.application.dto.in.CreateUserRequest;
+import ru.itmo.highload.catering.identity.application.dto.in.LoginRequest;
+import ru.itmo.highload.catering.identity.application.dto.out.TokenResponse;
+import ru.itmo.highload.catering.identity.domain.model.RoleCode;
+import ru.itmo.highload.catering.identity.application.UserService;
 
 @Testcontainers
 @AutoConfigureWebTestClient
@@ -110,7 +110,7 @@ class IdentityApiIT {
     @Autowired CircuitBreakerRegistry breakers;
 
     @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
-    ru.itmo.highload.catering.identity.repository.UserRepository repository;
+    ru.itmo.highload.catering.identity.adapters.out.persistence.UserRepository repository;
 
     String admin;
     static final String PASSWORD = "integration-password-42";
@@ -626,7 +626,7 @@ class IdentityApiIT {
         assertThatThrownBy(() -> users.bootstrap(null, null))
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> users.bootstrap("ok", "short"))
-                .isInstanceOf(ru.itmo.highload.common.error.ApiException.class);
+                .isInstanceOf(ru.itmo.highload.common.domain.BusinessFailure.class);
         users.bootstrap("  New.Admin  ", PASSWORD);
         assertThat(jdbc.queryForObject("select login from app_user", String.class))
                 .isEqualTo("new.admin");

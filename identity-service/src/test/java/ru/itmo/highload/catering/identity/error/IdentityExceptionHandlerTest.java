@@ -1,4 +1,4 @@
-package ru.itmo.highload.catering.identity.error;
+package ru.itmo.highload.catering.identity.adapters.in.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

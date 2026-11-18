@@ -21,6 +21,10 @@ public class OrderConfiguration {
     @Bean OrderService orderService(OrderStore orders,HistoryStore history,OrganizationService organizations,DishCatalog catalog,Clock clock,ru.itmo.highload.common.domain.events.EventOutbox outbox,PlatformTransactionManager tx) {
         return UseCaseTransactions.proxy(new OrderService(orders,history,organizations,catalog,clock,outbox),tx,"get*","list*","states","kitchenQueue");
     }
+    @Bean ru.itmo.highload.common.domain.events.EventInbox eventInbox(org.springframework.jdbc.core.JdbcTemplate jdbc) { return new ru.itmo.highload.common.events.JdbcInbox(jdbc); }
+    @Bean FileReferences fileReferences(OrderService orders,FileReferenceStore links,ru.itmo.highload.common.domain.events.EventInbox inbox,PlatformTransactionManager tx) {
+        return UseCaseTransactions.proxy(new FileReferences(orders,links,inbox),tx,"list");
+    }
     @Bean KitchenCommands kitchenCommands(CommandReceipts receipts,OrderService orders,PlatformTransactionManager tx) {
         return UseCaseTransactions.proxy(new KitchenCommands(receipts,orders),tx);
     }

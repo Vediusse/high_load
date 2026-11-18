@@ -103,7 +103,7 @@ class NotificationIT {
         UUID foreignId=jdbc.queryForList("select id from notification where recipient_user_id=?",UUID.class,other).getFirst();
         http.post().uri("/api/v1/notifications/"+foreignId+"/read").header("Authorization",bearer).exchange().expectStatus().isNotFound();
         assertThat(jdbc.queryForObject("select read_at is null from notification where id=?",Boolean.class,foreignId)).isTrue();
-        http.get().uri("/v3/api-docs").exchange().expectStatus().isOk().expectBody().jsonPath("$.components.securitySchemes.bearerAuth.scheme").isEqualTo("bearer");
+        http.get().uri("/v3/api-docs").exchange().expectStatus().isOk().expectBody().jsonPath("$.components.securitySchemes.bearerAuth.scheme").isEqualTo("bearer").jsonPath("$.servers[0].url").isEqualTo("/");
     }
 
 }

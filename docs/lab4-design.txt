@@ -64,6 +64,8 @@ SHA-256. Generated UUID storage key, never a supplied filename/path. Atomic bina
 write before metadata/outbox commit; remove new orphan on metadata rollback.
 Download checks checksum. Retained deleted bytes have no automatic physical cleanup.
 Order stores only fileId/type links via idempotent file-event consumer; never bytes.
+GET /api/v1/orders/{id}/file-references exposes its authorized, paginated projection
+(fileId/type only); the File Service listing remains authoritative metadata.
 
 Verification
 L4.0: 148 tests, coverage gates, 11 healthy, protected L1/L2/L3 scenarios passed.

@@ -39,7 +39,7 @@ class KitchenIT {
     @Autowired TaskProjection projection;
 
     @BeforeEach void reset() {
-        owner.reset();jdbc.execute("truncate kitchen_task");breakers.getAllCircuitBreakers().forEach(CircuitBreaker::reset);
+        owner.reset();jdbc.execute("truncate kitchen_task,processed_event,outbox_event");breakers.getAllCircuitBreakers().forEach(CircuitBreaker::reset);
         client=client.mutate().responseTimeout(Duration.ofSeconds(10)).build();
     }
 
@@ -217,6 +217,26 @@ class KitchenIT {
     private JsonNode queue(int page,int size,int status) {
         return client.get().uri("/internal/v1/kitchen/tasks?page="+page+"&size="+size).exchange()
                 .expectStatus().isEqualTo(status).expectBody(JsonNode.class).returnResult().getResponseBody();
+    }
+
+    @Test void eventsAreIdempotentAndOlderCancellationCannotOverwriteNewerProjection() {
+        UUID id=UUID.randomUUID(),org=UUID.randomUUID();
+        var confirm=new ru.itmo.highload.common.domain.events.EventEnvelope(UUID.randomUUID(),ru.itmo.highload.common.domain.events.EventType.ORDER_CONFIRMED,id,java.time.Instant.now(),1,
+                ru.itmo.highload.common.domain.events.EventEnvelope.Payload.order(org,4,null));
+        projection.consume(confirm);projection.consume(confirm);
+        assertTask(id,"CONFIRMED",4);
+        assertThat(jdbc.queryForObject("select count(*) from processed_event",Integer.class)).isEqualTo(1);
+        var old=new ru.itmo.highload.common.domain.events.EventEnvelope(UUID.randomUUID(),ru.itmo.highload.common.domain.events.EventType.ORDER_CANCELLED,id,java.time.Instant.now(),1,
+                ru.itmo.highload.common.domain.events.EventEnvelope.Payload.order(org,3,null));
+        projection.consume(old);assertTask(id,"CONFIRMED",4);
+        var cancelled=new ru.itmo.highload.common.domain.events.EventEnvelope(UUID.randomUUID(),ru.itmo.highload.common.domain.events.EventType.ORDER_CANCELLED,id,java.time.Instant.now(),1,
+                ru.itmo.highload.common.domain.events.EventEnvelope.Payload.order(org,5,null));
+        jdbc.execute("alter table kitchen_task add constraint test_event_failure check(false) not valid");
+        try { assertThatThrownBy(() -> projection.consume(cancelled)).isInstanceOf(RuntimeException.class); }
+        finally { jdbc.execute("alter table kitchen_task drop constraint test_event_failure"); }
+        assertThat(jdbc.queryForObject("select count(*) from processed_event where event_id=?",Integer.class,cancelled.eventId())).isZero();
+        projection.consume(cancelled);assertTask(id,"CANCELLED",5);
+        projection.consume(confirm);assertTask(id,"CANCELLED",5);
     }
     private OrderResponse command(OrderResponse order,String action,int status,String expected) {
         var response=client.post().uri("/api/v1/orders/"+order.id()+"/"+action).header("X-Trace-Id","kitchen-check")

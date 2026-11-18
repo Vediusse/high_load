@@ -308,8 +308,12 @@ class IdentityApiIT {
         var blocked=create("recipient-blocked",Set.of("ORGANIZATION_REPRESENTATIVE"),organizationId,201);
         UUID foreignOrg=UUID.randomUUID();
         organizationBody="{\"id\":\""+foreignOrg+"\",\"active\":true}";
-        create("recipient-foreign",Set.of("ORGANIZATION_REPRESENTATIVE"),foreignOrg,201);
+        create("recipient-foreign",Set.of("ORGANIZATION_REPRESENTATIVE","KITCHEN_MANAGER"),foreignOrg,201);
         organizationBody=null;
+        var globalKitchen=create("recipient-kitchen",Set.of("KITCHEN_MANAGER"),null,201);
+        http.get().uri("/internal/v1/recipients?role=KITCHEN_MANAGER&organizationId="+organizationId)
+                .header("X-Notification-Credential","test-notification-service-credential-42").exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.items.length()").isEqualTo(1).jsonPath("$.items[0]").isEqualTo(globalKitchen.get("id").asText());
         users.block(UUID.fromString(blocked.get("id").asText()));
         String path="/internal/v1/recipients?role=ORGANIZATION_REPRESENTATIVE&organizationId="+organizationId;
         http.get().uri(path).exchange().expectStatus().isForbidden();

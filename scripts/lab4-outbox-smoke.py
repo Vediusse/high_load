@@ -129,7 +129,7 @@ if args.failure_tests:
     try:
         docker('stop', '--timeout=20', *brokers)
         order = confirm(order)
-        assert db('order', "select count(*) from outbox_event where aggregate_id='" + order['id'] + "' and sent_at is null") == '1'
+        assert db('order', "select count(*) from outbox_event where aggregate_id='" + order['id'] + "' and payload->>'eventType'='ORDER_CONFIRMED' and sent_at is null") == '1'
         assert notifications(order) == '0'
     finally:
         docker('start', *brokers)
@@ -139,7 +139,7 @@ if args.failure_tests:
     try:
         docker('stop', '--timeout=30', service)
         backlog = confirm(submitted())
-        until(lambda: db('order', "select count(*) from outbox_event where aggregate_id='" + backlog['id'] + "' and sent_at is not null") == '1', 'broker acknowledgment')
+        until(lambda: db('order', "select count(*) from outbox_event where aggregate_id='" + backlog['id'] + "' and payload->>'eventType'='ORDER_CONFIRMED' and sent_at is not null") == '1', 'broker acknowledgment')
         assert notifications(backlog) == '0'
     finally:
         docker('start', service)

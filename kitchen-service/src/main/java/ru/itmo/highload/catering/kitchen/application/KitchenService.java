@@ -21,7 +21,7 @@ public class KitchenService {
         var current = orders.get(id, bearer);
         UUID commandId = ru.itmo.highload.catering.kitchen.domain.model.KitchenCommandIdentity.forAction(id, action, expectedVersion);
         var result = orders.command(id, new KitchenCommand(commandId, action.expectedStatus(), expectedVersion, action), bearer);
-        tasks.observe(current.version() > result.version() ? current : result);
+        tasks.recordCommand(current.version() > result.version() ? current : result, result, action);
         return result;
     }
 

@@ -71,7 +71,13 @@ class EventDeliveryIT {
     EventEnvelope event(UUID order) { return new EventEnvelope(UUID.randomUUID(),EventType.ORDER_CONFIRMED,order,Instant.now(),1,EventEnvelope.Payload.order(UUID.randomUUID(),3,null)); }
 
     @Test void rollbackRetryOrderingAndPoisonRecovery() throws Exception {
-        var tx=new TransactionTemplate(transactions);var first=event(UUID.randomUUID());var second=event(first.aggregateId());
+        var tx=new TransactionTemplate(transactions);
+        jdbc.execute("create table processed_event(event_id uuid primary key)");
+        var inbox=new JdbcInbox(jdbc);var inboxId=UUID.randomUUID();
+        assertThatThrownBy(() -> inbox.claim(inboxId)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> tx.executeWithoutResult(s -> { assertThat(inbox.claim(inboxId)).isTrue();throw new IllegalStateException("rollback inbox"); })).isInstanceOf(IllegalStateException.class);
+        tx.executeWithoutResult(s -> { assertThat(inbox.claim(inboxId)).isTrue();assertThat(inbox.claim(inboxId)).isFalse(); });
+        var first=event(UUID.randomUUID());var second=event(first.aggregateId());
         assertThatThrownBy(()->outbox.append(first)).isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(()->tx.executeWithoutResult(s->{outbox.append(first);throw new IllegalStateException("rollback");})).isInstanceOf(IllegalStateException.class);
         assertThat(jdbc.queryForObject("select count(*) from outbox_event",Integer.class)).isZero();

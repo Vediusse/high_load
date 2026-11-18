@@ -21,7 +21,7 @@ Kafka and events
 Three KRaft broker/controllers, distinct IDs and persistent volumes. order-events,
 production-events, file-events: 3 partitions, RF=3, min ISR=2. Key=orderId.
 Envelope: eventId, eventType, aggregateId (orderId), occurredAt UTC, version=1,
-payload {organizationId,orderVersion,actorUserId}, plus fileId/relationType for files.
+payload {organizationId,orderVersion,actorUserId}, plus fileId/relationType/fileVersion for files.
 No JWT/password/contact details. Independent topics use orderVersion for stale checks.
 Order emits ORDER_SUBMITTED/CONFIRMED/REJECTED/CANCELLED/COMPLETED.
 Kitchen emits COOKING_STARTED/ORDER_READY after its durable command receipt.
@@ -39,6 +39,8 @@ Consumer effect and processed_event commit together, protected by DB uniqueness.
 Offsets follow DB commit. Bounded poison retries then replicated dead-letter topic;
 failed DLQ publication cannot acknowledge/lose the original event.
 Cross-service synchronous receipt retries preserve the original audit actor/version.
+Production events retain the receipt version; actorUserId is null because Kitchen
+cannot infer the original actor from a retry caller. Authoritative audit stays in Order.
 
 Notifications
 PostgreSQL notification(id,recipient_user_id,type,subject_id,text,created_at,read_at),

@@ -8,7 +8,7 @@ import ru.itmo.highload.common.error.RequestValidationException;
 
 public final class Pagination {
     public static ru.itmo.highload.common.domain.PageQuery query(int page, int size) {
-        pageRequest(page, size);
+        validate(page, size);
         return ru.itmo.highload.common.domain.PageQuery.of(page, size);
     }
 
@@ -19,6 +19,11 @@ public final class Pagination {
     }
 
     public static PageRequest pageRequest(int page, int size) {
+        validate(page, size);
+        return PageRequest.of(page, size);
+    }
+
+    private static void validate(int page, int size) {
         List<FieldErrorResponse> errors = new ArrayList<>();
         if (page < 0) {
             errors.add(new FieldErrorResponse("page", "должно быть не меньше 0"));
@@ -29,7 +34,6 @@ public final class Pagination {
         if (!errors.isEmpty()) {
             throw new RequestValidationException(errors);
         }
-        return PageRequest.of(page, size);
     }
 
     public static int requireLimit(int limit) {

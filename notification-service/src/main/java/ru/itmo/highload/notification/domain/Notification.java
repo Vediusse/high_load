@@ -11,9 +11,19 @@ public record Notification(UUID id,UUID eventId,UUID recipientUserId,String type
         Objects.requireNonNull(subjectId);Objects.requireNonNull(createdAt);
         if(type==null || type.isBlank() || text==null || text.isBlank()) throw new IllegalArgumentException("Notification content required");
     }
-    public static Notification confirmed(EventEnvelope event,UUID recipient) {
+    public static Notification forEvent(EventEnvelope event,UUID recipient) {
         UUID id=UUID.nameUUIDFromBytes((event.eventId()+":"+recipient).getBytes(StandardCharsets.UTF_8));
         return new Notification(id,event.eventId(),recipient,event.eventType().name(),event.aggregateId(),
-                "Заказ подтверждён",event.occurredAt(),null);
+                switch(event.eventType()) {
+                    case ORDER_SUBMITTED -> "Заказ отправлен на кухню";
+                    case ORDER_CONFIRMED -> "Заказ подтверждён";
+                    case ORDER_REJECTED -> "Заказ отклонён";
+                    case ORDER_CANCELLED -> "Заказ отменён";
+                    case COOKING_STARTED -> "Приготовление заказа начато";
+                    case ORDER_READY -> "Заказ готов";
+                    case ORDER_COMPLETED -> "Заказ выдан";
+                    case FILE_UPLOADED -> "Файл заказа загружен";
+                    case FILE_DELETED -> "Файл заказа удалён";
+                },event.occurredAt(),null);
     }
 }

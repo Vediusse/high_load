@@ -10,6 +10,6 @@ public class NotificationConsumer {
     private final NotificationService notifications;
     private final EventCodec codec;
     public NotificationConsumer(NotificationService notifications,EventCodec codec) { this.notifications=notifications;this.codec=codec; }
-    @KafkaListener(topics="order-events",groupId="notification-v1")
+    @KafkaListener(topics={"order-events","production-events","file-events"},groupId="notification-v1")
     public void consume(ConsumerRecord<String,String> record) throws java.io.IOException { notifications.consume(codec.decode(record)); }
 }

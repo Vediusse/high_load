@@ -23,7 +23,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 public final class InternalJwt {
     public static final String TYPE = "catering-internal+jwt";
     public static final List<String> AUDIENCES = List.of(
-            "gateway-service", "identity-service", "catalog-service", "order-service", "kitchen-service");
+            "gateway-service", "identity-service", "catalog-service", "order-service", "kitchen-service", "notification-service");
     private static final Set<String> ROLES = Set.of(
             "SUPERVISOR", "CLIENT_MANAGER", "KITCHEN_MANAGER", "ORGANIZATION_REPRESENTATIVE");
 

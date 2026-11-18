@@ -214,7 +214,9 @@ public class OrderService {
                             (left, right) -> left,
                             LinkedHashMap::new));
             order.submit(snapshots, clock.instant(), changedBy(access));
-            return flushAndMap(order);
+            var result=flushAndMap(order);
+            publish(result, access);
+            return result;
         } catch (CorporateOrder.EmptyOrderException exception) {
             throw new BusinessFailure(BusinessFailure.Kind.REJECTED, "ORDER_EMPTY", exception.getMessage());
         } catch (CorporateOrder.DeliveryTimeNotFutureException exception) {
@@ -232,12 +234,7 @@ public class OrderService {
     }
 
     public OrderResponse confirm(UUID id, long expectedVersion, OrderAccess access) {
-        var result = executeStatusCommand(id, expectedVersion, access, order -> order.confirm(clock.instant(), changedBy(access)));
-        var type = ru.itmo.highload.common.domain.events.EventType.ORDER_CONFIRMED;
-        var eventId = UUID.nameUUIDFromBytes((type+":"+result.id()+":"+result.version()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        outbox.append(new ru.itmo.highload.common.domain.events.EventEnvelope(eventId,type,result.id(),clock.instant(),1,
-                ru.itmo.highload.common.domain.events.EventEnvelope.Payload.order(result.organizationId(),result.version(),changedBy(access))));
-        return result;
+        return executeStatusCommand(id, expectedVersion, access, order -> order.confirm(clock.instant(), changedBy(access)));
     }
 
     public OrderResponse reject(UUID id, RejectOrderRequest request) {
@@ -358,10 +355,27 @@ public class OrderService {
         requireExpectedVersion(order, expectedVersion);
         try {
             command.accept(order);
-            return flushAndMap(order);
+            var result=flushAndMap(order);
+            publish(result,access);
+            return result;
         } catch (CorporateOrder.OrderStatusException exception) {
             throw statusConflict(exception.getMessage());
         }
+    }
+
+    private void publish(OrderResponse result,OrderAccess access) {
+        var type=switch(result.status()) {
+            case SUBMITTED -> ru.itmo.highload.common.domain.events.EventType.ORDER_SUBMITTED;
+            case CONFIRMED -> ru.itmo.highload.common.domain.events.EventType.ORDER_CONFIRMED;
+            case REJECTED -> ru.itmo.highload.common.domain.events.EventType.ORDER_REJECTED;
+            case CANCELLED -> ru.itmo.highload.common.domain.events.EventType.ORDER_CANCELLED;
+            case COMPLETED -> ru.itmo.highload.common.domain.events.EventType.ORDER_COMPLETED;
+            default -> null;
+        };
+        if(type==null) return;
+        var eventId=UUID.nameUUIDFromBytes((type+":"+result.id()+":"+result.version()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        outbox.append(new ru.itmo.highload.common.domain.events.EventEnvelope(eventId,type,result.id(),clock.instant(),1,
+                ru.itmo.highload.common.domain.events.EventEnvelope.Payload.order(result.organizationId(),result.version(),changedBy(access))));
     }
 
     private BusinessFailure orderNotFound(UUID id) {

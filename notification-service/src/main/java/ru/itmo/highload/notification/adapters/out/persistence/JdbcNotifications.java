@@ -14,6 +14,18 @@ public final class JdbcNotifications implements NotificationStore {
     public boolean processed(UUID eventId) {
         return Boolean.TRUE.equals(jdbc.queryForObject("select exists(select 1 from processed_event where event_id=?)",Boolean.class,eventId));
     }
+    private static final org.springframework.jdbc.core.RowMapper<Notification> ROW=(rs,n) -> new Notification(
+            rs.getObject("id",UUID.class),rs.getObject("event_id",UUID.class),rs.getObject("recipient_user_id",UUID.class),
+            rs.getString("type"),rs.getObject("subject_id",UUID.class),rs.getString("text"),
+            rs.getTimestamp("created_at").toInstant(),rs.getTimestamp("read_at")==null?null:rs.getTimestamp("read_at").toInstant());
+    public ru.itmo.highload.common.domain.PageResult<Notification> list(UUID recipient,ru.itmo.highload.common.domain.PageQuery page) {
+        var rows=jdbc.query("select * from notification where recipient_user_id=? order by created_at desc,id desc limit ? offset ?",ROW,recipient,page.size()+1,page.getOffset());
+        boolean more=rows.size()>page.size();
+        return new ru.itmo.highload.common.domain.PageResult<>(rows.subList(0,Math.min(rows.size(),page.size())),page.page(),page.size(),-1,more);
+    }
+    public java.util.Optional<Notification> read(UUID recipient,UUID id) {
+        return jdbc.query("update notification set read_at=coalesce(read_at,clock_timestamp()) where id=? and recipient_user_id=? returning *",ROW,id,recipient).stream().findFirst();
+    }
     public void recordEvent(UUID eventId,List<Notification> notifications) {
         transaction.executeWithoutResult(status -> {
             if(jdbc.update("insert into processed_event(event_id) values (?) on conflict do nothing",eventId)==0) return;

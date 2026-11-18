@@ -1,55 +1,79 @@
-Проверка лабораторной 4 — 2026-11-18
+Проверка лабораторной 4 — доработка архитектуры и стиля, 2026-11-18
 
 Основа: принятая lab3, main c9f0d1f. Ветка feature/lab4.
-Бизнес лабораторий 1–3 сохранён; новый функционал описан в lab4-design.txt.
-
-Полный чистый Maven reactor: 188 tests, 0 failures/errors/skips, BUILD SUCCESS.
+Полный clean verify: 194 tests, 0 failures/errors/skips, BUILD SUCCESS.
 Команда: DOCKER_AUTH_CONFIG='{"auths":{}}' JAVA_HOME=$(/usr/libexec/java_home -v 21) ./mvnw -B -ntp -fae clean verify
 
-                         Tests   JaCoCo lines
-common                      29         95.41%
-config-service               3        100.00%
-discovery-service            2        100.00%
-gateway-service              8         95.40%
-catalog-service             16         98.44%
-order-service               64         92.59%
-kitchen-service             18         95.39%
-identity-service            34         96.34%
-notification-service         6         95.35%
-file-service                 8         91.62%
+Модуль                   Tests  JaCoCo lines    PMD
+catalog-service             17        98.94%      0
+common                      29        93.75%      0
+config-service               3       100.00%      0
+discovery-service            2       100.00%      0
+file-service                 9        87.80%      0
+gateway-service              8        96.27%      0
+identity-service            35        95.89%      0
+kitchen-service             19        96.82%      0
+notification-service         7        94.24%      0
+order-service               65        93.81%      0
 
-Проверки включают реальные PostgreSQL и три Kafka Testcontainers, replay,
-полный restart Kafka, broker loss, DLT и architecture gates бизнес-сервисов.
+Spotless 3.11.0 + google-java-format 2.0.0 (AOSP, 4 пробела): Java, тесты,
+Maven POM, короткие имена типов и чистые импорты. Wildcard-import запрещены.
+PMD 3.28.0 / engine 7.17.0: 14 правил, 0 нарушений во всех десяти модулях.
+ArchUnit: 3 правила в каждом из шести бизнес-сервисов — независимый domain,
+application через порты, отсутствие прямых связей inbound -> outbound.
 
-Отдельный чистый Compose: 9 приложений + 6 PostgreSQL + 3 Kafka;
-миграции всех шести БД применены с нуля. Config Server прочитал Git lab4 commit
-27e27eabe4ebfd1ec72ab62ed37a2e059910375f из отдельного high_load_configs.
-На этой машине Docker не смог обратиться к GitHub по HTTPS; использован
-поддерживаемый read-only local Git backend той же опубликованной ветки.
-Обычный remote Git остаётся основным вариантом compose.yaml.
+Исправления ревью
+- 51 пустой legacy-каталог удалён из checkout.
+- 21 assignment-only конструктор заменён @RequiredArgsConstructor;
+  обычные getters ApiException — @Getter. Проверки и защитные копии сохранены.
+- Раскрыты 194 wildcard-import, единообразно отформатированы Java/POM.
+- Удалены 7 неиспользуемых public-overloads, приватный дубль requireOrder,
+  промежуточный PageRequestValues и Spring-подобные getter-обёртки records.
+- UploadFileCommand и OrderSearch заменяют длинные списки параметров.
+- Query-аннотаций 11 -> 8: стандартные derived methods кухни/заказов,
+  R2dbcEntityTemplate.insert для категории. Атомарные и составные SQL сохранены.
+- Identity REST зависит от InternalTokens, а не от реализации подписи JWT.
+- Две Jackson-аннотации вынесены из application DTO в wiring; сохранение null
+  снимков проверяется прежними API-тестами. В domain нет внешних frameworks;
+  application сохраняет оговорённые Reactor Catalog и Jakarta validation DTO.
+- Пустой catch заменён явным ответом о недоступной зависимости.
+- Config default label — lab4. Прямой GitHub backend проверен; локальный override
+  отключён. Фактический config commit: 27e27eabe4ebfd1ec72ab62ed37a2e059910375f.
+- .env, локальные доступы и backup не входят в Git/контекст Docker-сборки.
 
-На чистом стенде с одним остановленным брокером прошли полный цикл уведомлений
-и полный цикл файлов: права, чужая организация, owner delete, MIME/signature/
-size, ранний акт, checksum и повреждение/восстановление, download, logical delete,
-сохранённые bytes, ссылки Order и уведомления.
+Требования задания
+Kafka: 3 brokers/controllers, основные topics order-events/production-events/
+file-events и DLT с RF3/minISR2. Key=orderId. Outbox+inbox, bounded retries и DLT.
+Notification: персональная лента, идемпотентное прочтение, paginated recipients.
+File: отдельные PG и binary volume, PDF/PNG/JPEG, размер, сигнатура и checksum,
+актуальный доступ к заказу, owner-only logical delete и событийные ссылки Order.
+Clean Architecture: pure domain, use cases/ports, inbound/outbound adapters,
+wiring транзакций/JSON/инфраструктуры снаружи. Техническим сервисам не добавлены
+фиктивные бизнес-слои. Синхронные проверки прав/цены/команды остаются синхронными;
+уведомления и проекции выполняются через Kafka.
 
-Финальный отказ всех брокеров обнаружил проблему кэшированных DNS-адресов:
-Docker поменял IP между broker ID. Событие осталось в outbox. Исправление —
-infra/jvm/network.security, дополнение стандартных security properties JDK.
-Новые соединения разрешают DNS заново, включая брокеры. Приёмочный критерий:
-автоматическое восстановление без ручного перезапуска приложений.
+Команды и ручной сценарий: docs/lab4-run.md.
+Архитектурные оговорки и границы production: docs/architecture.txt.
 
-Точные команды демонстрации и восстановления: lab4-run.md.
-Окружение, токены и локальные пароли в Git не включаются.
+Проверка финального Docker-стенда после рефакторинга
+Все 9 образов собраны из исходников. 18 контейнеров healthy, Swagger UI и шесть
+OpenAPI отвечают; server относительный /. Вход, /me и собственная лента проверены
+SUPERVISOR, CLIENT_MANAGER, KITCHEN_MANAGER и ORGANIZATION_REPRESENTATIVE.
 
-После исправления два последовательных полного отказа Kafka прошли без ручного
-restart producer/consumer приложений. В каждом прогоне проверены сохранение
-CONFIRMED и pending outbox во время отказа, доставка после восстановления,
-идемпотентный повтор, остановка Notification, backlog и повтор после его старта.
+Защищённая регрессия lab1–3 прошла: внешние/внутренние JWT, обмен только Gateway,
+граница отзыва, недоступность Identity, старый бизнес-цикл, REST/DTO contract.
+С остановленным kafka-3 прошли полные notification и file smoke: все бизнес-события,
+private feed/read, replay/poison/DLT, доступ и owner delete, MIME/size/signature,
+проверка и восстановление checksum, акт при READY, Order links и file notices.
 
-Защищённая регрессия лабораторий 1–3 прошла на чистом финальном стенде:
-JWT/exchange/roles/revocation, недоступность Identity и допущенная цепочка,
-полный старый бизнес-цикл и прежние REST DTO/параметры/ответы. Согласованное
-добавление file-references не меняет существующие операции. После догонки
-в order/kitchen/file нет pending outbox; Notification lag=0 на непустых
-партициях. Административный вывод подтверждает voters 1/2/3 и RF3 всех топиков.
+После восстановления третьего брокера прошёл полный отказ ВСЕХ брокеров:
+команда сохранила CONFIRMED и pending outbox, после старта событие доставлено.
+Остановка Notification не ломает команды; после его старта backlog обработан,
+повтор не создал дубля. Финальные outbox order/kitchen/file: pending=0;
+Notification lag=0 на непустых партициях. Admin output подтверждает RF3/minISR2.
+
+Config Server использует HTTPS GitHub напрямую, label lab4, commit 27e27ea;
+локальная копия в текущем запуске не используется. Создан свежий SUBMITTED-заказ
+для ручного сценария, проверено ровно одно уведомление демопользователю кухни.
+Локальные доступы/ID — CREDENTIALS.local.md (0600, Git ignored). Предыдущая версия
+файла сохранена приватно в AI/state/L4.7-review/. Технических блокеров нет.

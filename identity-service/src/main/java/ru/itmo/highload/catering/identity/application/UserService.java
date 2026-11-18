@@ -13,19 +13,21 @@ import ru.itmo.highload.catering.identity.application.dto.in.UpdateUserRolesRequ
 import ru.itmo.highload.catering.identity.application.dto.out.CurrentUserResponse;
 import ru.itmo.highload.catering.identity.application.dto.out.TokenResponse;
 import ru.itmo.highload.catering.identity.application.dto.out.UserResponse;
+import ru.itmo.highload.catering.identity.application.ports.BootstrapLock;
+import ru.itmo.highload.catering.identity.application.ports.OrganizationVerifier;
+import ru.itmo.highload.catering.identity.application.ports.PasswordHasher;
+import ru.itmo.highload.catering.identity.application.ports.RoleStore;
+import ru.itmo.highload.catering.identity.application.ports.TokenIssuer;
+import ru.itmo.highload.catering.identity.application.ports.UserStore;
+import ru.itmo.highload.catering.identity.domain.IdentityActor;
+import ru.itmo.highload.catering.identity.domain.InvalidIdentityToken;
 import ru.itmo.highload.catering.identity.domain.model.AppUser;
 import ru.itmo.highload.catering.identity.domain.model.Role;
 import ru.itmo.highload.catering.identity.domain.model.RoleCode;
 import ru.itmo.highload.catering.identity.domain.model.UserStatus;
-
-
-import ru.itmo.highload.common.dto.out.PageResponse;
 import ru.itmo.highload.common.domain.BusinessFailure;
 import ru.itmo.highload.common.domain.PageQuery;
-import ru.itmo.highload.catering.identity.application.ports.*;
-import ru.itmo.highload.catering.identity.domain.IdentityActor;
-import ru.itmo.highload.catering.identity.domain.InvalidIdentityToken;
-
+import ru.itmo.highload.common.dto.out.PageResponse;
 
 public class UserService {
     private final UserStore users;
@@ -62,7 +64,9 @@ public class UserService {
                                 user.map(AppUser::passwordHash).orElse(dummyHash));
         if (user.isEmpty() || !matches || user.get().getStatus() != UserStatus.ACTIVE) {
             throw new BusinessFailure(
-                    BusinessFailure.Kind.UNAUTHENTICATED, "INVALID_CREDENTIALS", "Неверные учётные данные");
+                    BusinessFailure.Kind.UNAUTHENTICATED,
+                    "INVALID_CREDENTIALS",
+                    "Неверные учётные данные");
         }
         return tokens.issue(user.get());
     }
@@ -89,13 +93,17 @@ public class UserService {
 
     public CurrentUserResponse current(IdentityActor jwt) {
         AppUser user = requireCurrent(jwt);
-        return new CurrentUserResponse(user.getId(), user.getLogin(), user.getStatus(),
-                user.roleCodes(), user.effectiveOrganizationId());
+        return new CurrentUserResponse(
+                user.getId(),
+                user.getLogin(),
+                user.getStatus(),
+                user.roleCodes(),
+                user.effectiveOrganizationId());
     }
 
     public PageResponse<UUID> recipients(RoleCode role, UUID organizationId, PageQuery page) {
-        var result=users.recipients(role,organizationId,page);
-        return new PageResponse<>(result.items(),page.page(),page.size(),result.hasNext());
+        var result = users.recipients(role, organizationId, page);
+        return new PageResponse<>(result.items(), page.page(), page.size(), result.hasNext());
     }
 
     public UserResponse get(UUID id) {
@@ -106,7 +114,10 @@ public class UserService {
         int page = query.page(), size = query.size();
         var result = users.findBy(query);
         return new PageResponse<>(
-                result.getContent().stream().map(this::toResponse).toList(), page, size, result.hasNext());
+                result.items().stream().map(this::toResponse).toList(),
+                page,
+                size,
+                result.hasNext());
     }
 
     public UserResponse create(CreateUserRequest request, IdentityActor actor) {
@@ -179,18 +190,21 @@ public class UserService {
     }
 
     private UserResponse toResponse(AppUser user) {
-        return new UserResponse(user.getId(), user.getLogin(), user.getStatus(),
-                user.roleCodes(), user.effectiveOrganizationId());
+        return new UserResponse(
+                user.getId(),
+                user.getLogin(),
+                user.getStatus(),
+                user.roleCodes(),
+                user.effectiveOrganizationId());
     }
 
     private AppUser find(UUID id) {
         return users.findById(id)
-                .orElseThrow(
-                        () ->
-                                new BusinessFailure(
-                                        BusinessFailure.Kind.NOT_FOUND,
-                                        "RESOURCE_NOT_FOUND",
-                                        "Пользователь не найден"));
+                .orElseThrow(() ->
+                        new BusinessFailure(
+                                BusinessFailure.Kind.NOT_FOUND,
+                                "RESOURCE_NOT_FOUND",
+                                "Пользователь не найден"));
     }
 
     private Set<Role> resolveRoles(Collection<RoleCode> codes) {

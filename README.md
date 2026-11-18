@@ -25,6 +25,17 @@ docker compose up -d --build --wait --wait-timeout 600
 
 Config Server использует отдельный Git-репозиторий [high_load_configs, ветка lab4](https://github.com/Vediusse/high_load_configs/tree/lab4): общие свойства в `application.yml`, отдельные — в `<service>/application.yml`. Секреты передаются через окружение. `CONFIG_REPO_URI` и `CONFIG_REPO_LABEL` задаются в `.env`. Локальная Git-копия также поддерживается; порядок настройки описан в [документации запуска](docs/lab4-run.md).
 
+## Стиль и статический анализ
+
+Java и Maven POM форматируются Spotless; для Java используется Google Java Format (AOSP, отступ 4 пробела). В `verify` входят проверка формата, PMD и ArchUnit. Wildcard-import запрещены, неиспользуемые импорты удаляются автоматически. PMD проверяет неиспользуемый код, лишние конструкции, работу с ресурсами и проверки `null`; XML-отчёт находится в `<module>/target/pmd.xml`.
+
+```bash
+JAVA_HOME=$(/usr/libexec/java_home -v 21) ./mvnw spotless:apply
+JAVA_HOME=$(/usr/libexec/java_home -v 21) ./mvnw spotless:check
+```
+
+В application передаются собственные `Request`/`Command`/query-объекты для составных операций, например `UploadFileCommand` и `OrderSearch`. Для простого поиска по `id` или смены статуса с ожидаемой версией используются обычные типизированные параметры. HTTP, JWT и multipart разбираются во входных адаптерах.
+
 ## Проверка
 
 Все unit-тесты, интеграционные тесты с PostgreSQL и настоящим кластером из трёх Kafka-брокеров, ArchUnit и порог JaCoCo 70%:

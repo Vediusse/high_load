@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,8 +24,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
+import ru.itmo.highload.catering.order.application.OrderSearch;
+import ru.itmo.highload.catering.order.application.OrderService;
 import ru.itmo.highload.catering.order.application.dto.in.CancelOrderRequest;
 import ru.itmo.highload.catering.order.application.dto.in.CreateOrderRequest;
 import ru.itmo.highload.catering.order.application.dto.in.OrderCommandRequest;
@@ -34,8 +36,6 @@ import ru.itmo.highload.catering.order.application.dto.out.OrderPageResult;
 import ru.itmo.highload.catering.order.application.dto.out.OrderResponse;
 import ru.itmo.highload.catering.order.application.dto.out.OrderStatusHistoryResponse;
 import ru.itmo.highload.catering.order.domain.model.OrderStatus;
-import ru.itmo.highload.catering.order.application.OrderService;
-import ru.itmo.highload.catering.order.application.OrderAccess;
 import ru.itmo.highload.common.config.StandardApiErrors;
 import ru.itmo.highload.common.dto.out.PageResponse;
 import ru.itmo.highload.common.web.BlockingRequests;
@@ -58,7 +58,9 @@ public class OrderController {
     @ApiResponse(responseCode = "201", description = "Черновик создан")
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<OrderResponse> create(
-            @Valid @RequestBody CreateOrderRequest request, ServerHttpResponse httpResponse, @AuthenticationPrincipal Jwt actor) {
+            @Valid @RequestBody CreateOrderRequest request,
+            ServerHttpResponse httpResponse,
+            @AuthenticationPrincipal Jwt actor) {
         return blocking.call(() -> {
             OrderResponse response = orderService.createDraft(request, OrderActor.from(actor));
             httpResponse.getHeaders().setLocation(URI.create("/api/v1/orders/" + response.id()));
@@ -79,20 +81,23 @@ public class OrderController {
     @ApiResponse(
             responseCode = "200",
             description = "Страница заказов",
-            headers = @Header(name = "X-Total-Count", description = "Общее количество заказов по фильтру"))
+            headers =
+                    @Header(
+                            name = "X-Total-Count",
+                            description = "Общее количество заказов по фильтру"))
     public Mono<PageResponse<OrderResponse>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) OrderStatus status,
-            @RequestParam(required = false) UUID organizationId, ServerHttpResponse httpResponse, @AuthenticationPrincipal Jwt actor) {
+            @RequestParam(required = false) UUID organizationId,
+            ServerHttpResponse httpResponse,
+            @AuthenticationPrincipal Jwt actor) {
         return blocking.call(() -> {
-            PageRequestValues pageRequest = validatePage(page, size);
-            OrderPageResult result = orderService.listOrders(
-                    pageRequest.page(),
-                    pageRequest.size(),
-                    status,
-                    organizationId,
-                    OrderActor.from(actor));
+            var pageRequest = Pagination.query(page, size);
+            OrderPageResult result =
+                    orderService.listOrders(
+                            new OrderSearch(pageRequest, status, organizationId),
+                            OrderActor.from(actor));
             httpResponse.getHeaders().set("X-Total-Count", Long.toString(result.totalCount()));
             return result.body();
         });
@@ -103,8 +108,10 @@ public class OrderController {
     @Operation(summary = "Изменить детали черновика")
     public Mono<OrderResponse> updateDetails(
             @PathVariable UUID id,
-            @Valid @RequestBody UpdateOrderDetailsRequest request, @AuthenticationPrincipal Jwt actor) {
-        return blocking.call(() -> orderService.updateDraftDetails(id, request, OrderActor.from(actor)));
+            @Valid @RequestBody UpdateOrderDetailsRequest request,
+            @AuthenticationPrincipal Jwt actor) {
+        return blocking.call(
+                () -> orderService.updateDraftDetails(id, request, OrderActor.from(actor)));
     }
 
     @PutMapping("/{id}/lines")
@@ -112,9 +119,11 @@ public class OrderController {
     @Operation(summary = "Атомарно заменить позиции черновика")
     public Mono<OrderResponse> replaceLines(
             @PathVariable UUID id,
-            @Valid @RequestBody ReplaceOrderLinesRequest request, @AuthenticationPrincipal Jwt actor) {
-        return blocking.call(() -> orderService.replaceDraftLines(
-                id, request, "Bearer " + actor.getTokenValue(), OrderActor.from(actor)));
+            @Valid @RequestBody ReplaceOrderLinesRequest request,
+            @AuthenticationPrincipal Jwt actor) {
+        return blocking.call(() ->
+                orderService.replaceDraftLines(
+                        id, request, "Bearer " + actor.getTokenValue(), OrderActor.from(actor)));
     }
 
     @DeleteMapping("/{id}")
@@ -134,9 +143,14 @@ public class OrderController {
     @Operation(summary = "Отправить заказ и зафиксировать снимки цен")
     public Mono<OrderResponse> submit(
             @PathVariable UUID id,
-            @Valid @RequestBody OrderCommandRequest request, @AuthenticationPrincipal Jwt actor) {
-        return blocking.call(() -> orderService.submit(
-                id, request.expectedVersion(), "Bearer " + actor.getTokenValue(), OrderActor.from(actor)));
+            @Valid @RequestBody OrderCommandRequest request,
+            @AuthenticationPrincipal Jwt actor) {
+        return blocking.call(() ->
+                orderService.submit(
+                        id,
+                        request.expectedVersion(),
+                        "Bearer " + actor.getTokenValue(),
+                        OrderActor.from(actor)));
     }
 
     @PostMapping("/{id}/confirm")
@@ -144,8 +158,10 @@ public class OrderController {
     @Operation(summary = "Подтвердить заказ целиком")
     public Mono<OrderResponse> confirm(
             @PathVariable UUID id,
-            @Valid @RequestBody OrderCommandRequest request, @AuthenticationPrincipal Jwt actor) {
-        return blocking.call(() -> orderService.confirm(id, request.expectedVersion(), OrderActor.from(actor)));
+            @Valid @RequestBody OrderCommandRequest request,
+            @AuthenticationPrincipal Jwt actor) {
+        return blocking.call(
+                () -> orderService.confirm(id, request.expectedVersion(), OrderActor.from(actor)));
     }
 
     @PostMapping("/{id}/reject")
@@ -153,7 +169,8 @@ public class OrderController {
     @Operation(summary = "Отклонить заказ целиком с причиной")
     public Mono<OrderResponse> reject(
             @PathVariable UUID id,
-            @Valid @RequestBody RejectOrderRequest request, @AuthenticationPrincipal Jwt actor) {
+            @Valid @RequestBody RejectOrderRequest request,
+            @AuthenticationPrincipal Jwt actor) {
         return blocking.call(() -> orderService.reject(id, request, OrderActor.from(actor)));
     }
 
@@ -162,7 +179,8 @@ public class OrderController {
     @Operation(summary = "Отменить заказ до начала приготовления")
     public Mono<OrderResponse> cancel(
             @PathVariable UUID id,
-            @Valid @RequestBody CancelOrderRequest request, @AuthenticationPrincipal Jwt actor) {
+            @Valid @RequestBody CancelOrderRequest request,
+            @AuthenticationPrincipal Jwt actor) {
         return blocking.call(() -> orderService.cancel(id, request, OrderActor.from(actor)));
     }
 
@@ -172,15 +190,9 @@ public class OrderController {
     public Mono<PageResponse<OrderStatusHistoryResponse>> history(
             @PathVariable UUID id,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size, @AuthenticationPrincipal Jwt actor) {
-        return blocking.call(() -> orderService.getHistory(id, Pagination.query(page, size), OrderActor.from(actor)));
-    }
-
-    private PageRequestValues validatePage(int page, int size) {
-        var pageRequest = Pagination.query(page, size);
-        return new PageRequestValues(pageRequest.getPageNumber(), pageRequest.getPageSize());
-    }
-
-    private record PageRequestValues(int page, int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt actor) {
+        return blocking.call(() ->
+                orderService.getHistory(id, Pagination.query(page, size), OrderActor.from(actor)));
     }
 }

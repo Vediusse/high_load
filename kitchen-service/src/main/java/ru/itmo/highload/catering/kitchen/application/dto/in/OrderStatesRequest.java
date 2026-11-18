@@ -6,4 +6,5 @@ import java.util.Set;
 import java.util.UUID;
 import ru.itmo.highload.common.web.Pagination;
 
-public record OrderStatesRequest(@NotNull @Size(min = 1, max = Pagination.MAX_SIZE) Set<@NotNull UUID> ids) { }
+public record OrderStatesRequest(
+        @NotNull @Size(min = 1, max = Pagination.MAX_SIZE) Set<@NotNull UUID> ids) {}

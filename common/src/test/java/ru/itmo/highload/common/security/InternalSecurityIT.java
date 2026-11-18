@@ -1,6 +1,6 @@
 package ru.itmo.highload.common.security;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -25,79 +25,180 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
-@SpringBootTest(classes = InternalSecurityIT.Application.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+@SpringBootTest(
+        classes = InternalSecurityIT.Application.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "spring.application.name=order-service")
 @AutoConfigureWebTestClient
 class InternalSecurityIT {
     @SpringBootConfiguration
     @EnableAutoConfiguration
     @Import(Endpoint.class)
-    static class Application { }
+    static class Application {}
+
     @RestController
     static class Endpoint {
         @GetMapping({"/actor", "/actuator/info"})
         Mono<Map<String, String>> actor(@AuthenticationPrincipal Jwt actor) {
             return Mono.just(Map.of("id", actor.getSubject()));
         }
+
         @GetMapping("/supervisor")
         @org.springframework.security.access.prepost.PreAuthorize("hasRole('SUPERVISOR')")
-        Mono<String> supervisor() { return Mono.just("ok"); }
-        @GetMapping("/actuator/health") Mono<String> health() { return Mono.just("ok"); }
+        Mono<String> supervisor() {
+            return Mono.just("ok");
+        }
+
+        @GetMapping("/actuator/health")
+        Mono<String> health() {
+            return Mono.just("ok");
+        }
     }
-    @DynamicPropertySource static void properties(DynamicPropertyRegistry properties) { TestTokens.register(properties); }
+
+    @DynamicPropertySource
+    static void properties(DynamicPropertyRegistry properties) {
+        TestTokens.register(properties);
+    }
+
     @Autowired WebTestClient client;
 
-    @Test void authenticatesLocallyAndAppliesRolesWithoutAnIdentityServer() {
-        client.get().uri("/actor").header("Authorization", TestTokens.bearer()).exchange()
-                .expectStatus().isOk().expectBody().jsonPath("$.id").isEqualTo(TestTokens.SUBJECT);
-        client.get().uri("/actuator/info").header("Authorization", TestTokens.bearer()).exchange().expectStatus().isOk();
-        String manager = TestTokens.token(TestTokens.claims().claim("roles", List.of("CLIENT_MANAGER")).build());
-        client.get().uri("/actuator/info").headers(h -> h.setBearerAuth(manager)).exchange()
-                .expectStatus().isForbidden().expectBody().jsonPath("$.code").isEqualTo("ACCESS_DENIED");
-        client.get().uri("/supervisor").headers(h -> h.setBearerAuth(manager)).exchange()
-                .expectStatus().isForbidden().expectBody().jsonPath("$.code").isEqualTo("ACCESS_DENIED");
+    @Test
+    void authenticatesLocallyAndAppliesRolesWithoutAnIdentityServer() {
+        client.get()
+                .uri("/actor")
+                .header("Authorization", TestTokens.bearer())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.id")
+                .isEqualTo(TestTokens.SUBJECT);
+        client.get()
+                .uri("/actuator/info")
+                .header("Authorization", TestTokens.bearer())
+                .exchange()
+                .expectStatus()
+                .isOk();
+        String manager =
+                TestTokens.token(
+                        TestTokens.claims().claim("roles", List.of("CLIENT_MANAGER")).build());
+        client.get()
+                .uri("/actuator/info")
+                .headers(h -> h.setBearerAuth(manager))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("ACCESS_DENIED");
+        client.get()
+                .uri("/supervisor")
+                .headers(h -> h.setBearerAuth(manager))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("ACCESS_DENIED");
         client.get().uri("/actuator/health").exchange().expectStatus().isOk();
     }
 
-    @Test void rejectsMissingAmbiguousAndTamperedTokensWithTrace() {
-        client.get().uri("/actor").header("X-Trace-Id", "auth-test").exchange()
-                .expectStatus().isUnauthorized().expectHeader().valueEquals("WWW-Authenticate", "Bearer")
-                .expectBody().jsonPath("$.traceId").isEqualTo("auth-test");
-        client.get().uri("/actor").header("Authorization", TestTokens.bearer(), TestTokens.bearer()).exchange()
-                .expectStatus().isUnauthorized();
-        client.get().uri("/actor").header("Authorization", "Bearer " + TestTokens.token() + "broken").exchange()
-                .expectStatus().isUnauthorized();
+    @Test
+    void rejectsMissingAmbiguousAndTamperedTokensWithTrace() {
+        client.get()
+                .uri("/actor")
+                .header("X-Trace-Id", "auth-test")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectHeader()
+                .valueEquals("WWW-Authenticate", "Bearer")
+                .expectBody()
+                .jsonPath("$.traceId")
+                .isEqualTo("auth-test");
+        client.get()
+                .uri("/actor")
+                .header("Authorization", TestTokens.bearer(), TestTokens.bearer())
+                .exchange()
+                .expectStatus()
+                .isUnauthorized();
+        client.get()
+                .uri("/actor")
+                .header("Authorization", "Bearer " + TestTokens.token() + "broken")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized();
     }
 
-    @Test void rejectsWrongAudienceIssuerLifetimeAndIdentityClaims() {
-        List<Consumer<JwtClaimsSet.Builder>> invalid = List.of(
-                c -> c.audience(List.of("another-service")), c -> c.issuer("external"),
-                c -> c.subject("invalid"), c -> c.id("invalid"), c -> c.claim("ver", -1),
-                c -> c.claim("ver", "1"), c -> c.claim("roles", List.of()),
-                c -> c.claim("roles", List.of("UNKNOWN")), c -> c.claim("roles", List.of("SUPERVISOR", "SUPERVISOR")),
-                c -> c.claim("roles", List.of(1)), c -> c.claim("organizationId", UUID.randomUUID().toString()),
-                c -> c.claim("roles", List.of("ORGANIZATION_REPRESENTATIVE")),
-                c -> c.expiresAt(Instant.now().plusSeconds(100)),
-                c -> c.issuedAt(Instant.now().minusSeconds(60)).expiresAt(Instant.now().minusSeconds(30)),
-                c -> c.issuedAt(Instant.now().plusSeconds(10)).expiresAt(Instant.now().plusSeconds(20)),
-                c -> c.notBefore(Instant.now().plusSeconds(20)));
+    @Test
+    void rejectsWrongAudienceIssuerLifetimeAndIdentityClaims() {
+        List<Consumer<JwtClaimsSet.Builder>> invalid =
+                List.of(
+                        c -> c.audience(List.of("another-service")),
+                        c -> c.issuer("external"),
+                        c -> c.subject("invalid"),
+                        c -> c.id("invalid"),
+                        c -> c.claim("ver", -1),
+                        c -> c.claim("ver", "1"),
+                        c -> c.claim("roles", List.of()),
+                        c -> c.claim("roles", List.of("UNKNOWN")),
+                        c -> c.claim("roles", List.of("SUPERVISOR", "SUPERVISOR")),
+                        c -> c.claim("roles", List.of(1)),
+                        c -> c.claim("organizationId", UUID.randomUUID().toString()),
+                        c -> c.claim("roles", List.of("ORGANIZATION_REPRESENTATIVE")),
+                        c -> c.expiresAt(Instant.now().plusSeconds(100)),
+                        c ->
+                                c.issuedAt(Instant.now().minusSeconds(60))
+                                        .expiresAt(Instant.now().minusSeconds(30)),
+                        c ->
+                                c.issuedAt(Instant.now().plusSeconds(10))
+                                        .expiresAt(Instant.now().plusSeconds(20)),
+                        c -> c.notBefore(Instant.now().plusSeconds(20)));
         for (var change : invalid) {
-            var claims = TestTokens.claims(); change.accept(claims);
-            client.get().uri("/actor").headers(h -> h.setBearerAuth(TestTokens.token(claims.build())))
-                    .exchange().expectStatus().isUnauthorized();
+            var claims = TestTokens.claims();
+            change.accept(claims);
+            client.get()
+                    .uri("/actor")
+                    .headers(h -> h.setBearerAuth(TestTokens.token(claims.build())))
+                    .exchange()
+                    .expectStatus()
+                    .isUnauthorized();
         }
-        String representative = TestTokens.token(TestTokens.claims().claim("roles", List.of("ORGANIZATION_REPRESENTATIVE"))
-                .claim("organizationId", UUID.randomUUID().toString()).build());
-        client.get().uri("/actor").headers(h -> h.setBearerAuth(representative)).exchange().expectStatus().isOk();
+        String representative =
+                TestTokens.token(
+                        TestTokens.claims()
+                                .claim("roles", List.of("ORGANIZATION_REPRESENTATIVE"))
+                                .claim("organizationId", UUID.randomUUID().toString())
+                                .build());
+        client.get()
+                .uri("/actor")
+                .headers(h -> h.setBearerAuth(representative))
+                .exchange()
+                .expectStatus()
+                .isOk();
     }
 
-    @Test void invalidKeysAndUnsafeTimeConfigurationFailAtStartup() {
-        assertThatThrownBy(() -> InternalJwt.publicKey("not-a-key")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new InternalJwtProperties(null, "issuer", Duration.ofSeconds(30), Duration.ZERO))
+    @Test
+    void invalidKeysAndUnsafeTimeConfigurationFailAtStartup() {
+        assertThatThrownBy(() -> InternalJwt.publicKey("not-a-key"))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new InternalJwtProperties(TestTokens.publicKey(), "issuer", Duration.ofMinutes(5), Duration.ZERO))
+        assertThatThrownBy(() ->
+                        new InternalJwtProperties(
+                                null, "issuer", Duration.ofSeconds(30), Duration.ZERO))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new InternalJwtProperties(TestTokens.publicKey(), "issuer", Duration.ofSeconds(30), Duration.ofSeconds(30)))
+        assertThatThrownBy(() ->
+                        new InternalJwtProperties(
+                                TestTokens.publicKey(),
+                                "issuer",
+                                Duration.ofMinutes(5),
+                                Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() ->
+                        new InternalJwtProperties(
+                                TestTokens.publicKey(),
+                                "issuer",
+                                Duration.ofSeconds(30),
+                                Duration.ofSeconds(30)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

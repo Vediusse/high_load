@@ -13,9 +13,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
+import ru.itmo.highload.catering.identity.application.UserService;
 import ru.itmo.highload.catering.identity.application.dto.in.LoginRequest;
 import ru.itmo.highload.catering.identity.application.dto.out.TokenResponse;
-import ru.itmo.highload.catering.identity.application.UserService;
 import ru.itmo.highload.common.config.StandardApiErrors;
 import ru.itmo.highload.common.dto.out.ApiError;
 import ru.itmo.highload.common.web.BlockingRequests;
@@ -32,8 +32,13 @@ public class AuthenticationController {
     @PostMapping("/login")
     @Operation(summary = "Войти и получить JWT")
     @SecurityRequirements
-    @ApiResponse(responseCode = "401", description = "Неверные учётные данные",
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = "Неверные учётные данные",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class)))
     public Mono<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
         return blocking.call(() -> users.login(request));
     }

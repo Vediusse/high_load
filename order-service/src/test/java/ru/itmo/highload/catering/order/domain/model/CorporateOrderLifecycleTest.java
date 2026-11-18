@@ -32,10 +32,11 @@ class CorporateOrderLifecycleTest {
                         OrderStatus.IN_COOKING,
                         OrderStatus.READY,
                         OrderStatus.COMPLETED);
-        assertThat(order.getHistory()).allSatisfy(history -> {
-            assertThat(history.getReason()).isNull();
-            assertThat(history.getChangedBy()).isNull();
-        });
+        assertThat(order.getHistory())
+                .allSatisfy(history -> {
+                    assertThat(history.getReason()).isNull();
+                    assertThat(history.getChangedBy()).isNull();
+                });
     }
 
     @Test
@@ -45,11 +46,13 @@ class CorporateOrderLifecycleTest {
         order.reject("  кухня закрыта  ", NOW.plusSeconds(1));
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.REJECTED);
-        assertThat(order.getHistory()).last().satisfies(history -> {
-            assertThat(history.getFromStatus()).isEqualTo(OrderStatus.SUBMITTED);
-            assertThat(history.getToStatus()).isEqualTo(OrderStatus.REJECTED);
-            assertThat(history.getReason()).isEqualTo("кухня закрыта");
-        });
+        assertThat(order.getHistory())
+                .last()
+                .satisfies(history -> {
+                    assertThat(history.getFromStatus()).isEqualTo(OrderStatus.SUBMITTED);
+                    assertThat(history.getToStatus()).isEqualTo(OrderStatus.REJECTED);
+                    assertThat(history.getReason()).isEqualTo("кухня закрыта");
+                });
         assertThatThrownBy(() -> order.confirm(NOW.plusSeconds(2)))
                 .isInstanceOf(CorporateOrder.OrderStatusException.class);
         assertThat(order.getHistory()).hasSize(2);
@@ -69,12 +72,18 @@ class CorporateOrderLifecycleTest {
         assertThat(List.of(draft, submitted, confirmed))
                 .extracting(CorporateOrder::getStatus)
                 .containsOnly(OrderStatus.CANCELLED);
-        assertThat(draft.getHistory()).singleElement().satisfies(history ->
-                assertThat(history.getFromStatus()).isEqualTo(OrderStatus.DRAFT));
-        assertThat(submitted.getHistory()).last().satisfies(history ->
-                assertThat(history.getFromStatus()).isEqualTo(OrderStatus.SUBMITTED));
-        assertThat(confirmed.getHistory()).last().satisfies(history ->
-                assertThat(history.getFromStatus()).isEqualTo(OrderStatus.CONFIRMED));
+        assertThat(draft.getHistory())
+                .singleElement()
+                .satisfies(history ->
+                        assertThat(history.getFromStatus()).isEqualTo(OrderStatus.DRAFT));
+        assertThat(submitted.getHistory())
+                .last()
+                .satisfies(history ->
+                        assertThat(history.getFromStatus()).isEqualTo(OrderStatus.SUBMITTED));
+        assertThat(confirmed.getHistory())
+                .last()
+                .satisfies(history ->
+                        assertThat(history.getFromStatus()).isEqualTo(OrderStatus.CONFIRMED));
     }
 
     @Test
@@ -130,8 +139,8 @@ class CorporateOrderLifecycleTest {
     private CorporateOrder submittedOrder() {
         CorporateOrder order = draft();
         UUID dishId = UUID.randomUUID();
-        order.replaceLines(List.of(
-                new CorporateOrder.DraftLine(dishId, 2, new BigDecimal("180.00"))));
+        order.replaceLines(
+                List.of(new CorporateOrder.DraftLine(dishId, 2, new BigDecimal("180.00"))));
         order.submit(
                 Map.of(dishId, new CorporateOrder.DishSnapshot("Борщ", new BigDecimal("180.00"))),
                 NOW);

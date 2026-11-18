@@ -11,10 +11,16 @@ public record InternalJwtProperties(
         @DefaultValue("30s") Duration ttl,
         @DefaultValue("2s") Duration clockSkew) {
     public InternalJwtProperties {
-        if (publicKeyBase64 == null || publicKeyBase64.isBlank() || issuer == null || issuer.isBlank()
-                || ttl == null || ttl.compareTo(Duration.ofSeconds(5)) < 0
-                || ttl.compareTo(Duration.ofSeconds(60)) > 0 || clockSkew == null
-                || clockSkew.isNegative() || clockSkew.compareTo(Duration.ofSeconds(5)) > 0) {
+        if (publicKeyBase64 == null
+                || publicKeyBase64.isBlank()
+                || issuer == null
+                || issuer.isBlank()
+                || ttl == null
+                || ttl.compareTo(Duration.ofSeconds(5)) < 0
+                || ttl.compareTo(Duration.ofSeconds(60)) > 0
+                || clockSkew == null
+                || clockSkew.isNegative()
+                || clockSkew.compareTo(Duration.ofSeconds(5)) > 0) {
             throw new IllegalArgumentException("Invalid internal JWT settings");
         }
     }

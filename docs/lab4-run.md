@@ -91,17 +91,29 @@ printf '%s|%s\n' "$ORDER_ID" "$(cat event.json)" | docker compose exec -T kafka-
   --producer-property acks=all
 ```
 
-## Файлы и уведомления в Swagger
+## Сценарий через Swagger
 
-Войти через Identity `POST /api/v1/auth/login`, вставить полученный внешний JWT в Authorize. Каждый сервис использует относительный server `/`, поэтому запросы идут через Gateway.
+Текущий локальный стенд: `http://localhost:18084/swagger-ui/index.html`. Доступы и готовые ID находятся в локальном `CREDENTIALS.local.md`. Для свежего набора демоданных:
 
-1. Представитель создаёт и отправляет заказ; кухня подтверждает его целиком.
-2. В File Service загрузить multipart: `orderId`, `SPECIFICATION`, PDF/PNG/JPEG до 10 MiB.
-3. Скачать `GET /files/{id}`, сверить checksum из ответа загрузки.
-4. В Order посмотреть `/orders/{id}/file-references`; в File — `/orders/{id}/files`.
-5. После READY загрузить `DISCREPANCY_ACT`.
-6. Другой организации скачивание вернёт 404. Удаление разрешено владельцу; повторное удаление даёт 204, скачивание удалённого — 404. Бинарные данные сохраняются.
-7. Notification показывает только собственную ленту и позволяет отметить уведомление прочитанным.
+```bash
+python3 scripts/seed-demo.py --env-file .env --base-url http://localhost:18084
+```
+
+1. В Identity выполнить `POST /api/v1/auth/login` с логином/паролем **KITCHEN_MANAGER**, вставить `accessToken` в Authorize. Супервизор предназначен для управления пользователями; бизнес-сценарий выполняют бизнес-роли.
+2. В Order получить `GET /api/v1/orders/{id}` для demo order. Он создан в `SUBMITTED`. Выполнить `POST /orders/{id}/confirm` с телом `{"expectedVersion": <текущая version>}`. В каждом следующем переходе брать новую `version` из ответа.
+3. Войти как **ORGANIZATION_REPRESENTATIVE**. В Notification вызвать `GET /api/v1/notifications`: после асинхронной доставки появится `ORDER_CONFIRMED`. `POST /notifications/{notificationId}/read` отметить прочитанным; повтор не меняет время отметки.
+4. В File выполнить `POST /api/v1/files`, multipart: `orderId` из файла доступов, `relationType=SPECIFICATION`, настоящий PDF/PNG/JPEG до 10 MiB. Сохранить `id` ответа. `GET /files/{id}` скачивает содержимое; `GET /orders/{id}/files` показывает метаданные; Order `/orders/{id}/file-references` показывает событийную ссылку после доставки.
+5. Войти как **KITCHEN_MANAGER**, в Kitchen выполнить `POST /orders/{id}/start-cooking`, затем `/mark-ready`, каждый раз с актуальной `expectedVersion`. Представитель увидит `ORDER_READY` в своей ленте. Теперь разрешена загрузка `DISCREPANCY_ACT`.
+6. Под логином пользователя, загрузившего спецификацию, вызвать `DELETE /files/{fileId}`. Повтор даст `204`, последующее скачивание — `404`. Физические bytes сохраняются, ссылка Order скрывается после события удаления.
+7. Проверить запреты: устаревшая `expectedVersion` → `409`; бизнес-запрос супервизора без бизнес-роли → `403`; акт до `READY` → `422`; запрещённый MIME → `415`; слишком большой файл → `413`. Удалять файл может только загрузивший его пользователь.
+
+Переходы в этих шагах используют префикс `/api/v1`; Swagger подставляет его сам. При смене роли заменить токен в Authorize. Для проверки чужой организации и всей матрицы файлов/уведомлений предусмотрены последовательные `lab4-files-smoke.py` и `lab4-notifications-smoke.py`: они сами создают вторую организацию и нужные тестовые роли.
+
+Полная проверка недоступности Kafka, backlog Notification и повторов:
+
+```bash
+python3 scripts/lab4-outbox-smoke.py --env-file .env --base-url http://localhost:18084 --failure-tests
+```
 
 ## Сохранение данных
 

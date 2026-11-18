@@ -1,6 +1,5 @@
 package ru.itmo.highload.catering.identity.adapters.out.security;
 
-import ru.itmo.highload.catering.identity.application.ports.TokenIssuer;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import java.time.Instant;
 import java.util.Base64;
@@ -26,6 +25,7 @@ import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.stereotype.Service;
 import ru.itmo.highload.catering.config.JwtProperties;
 import ru.itmo.highload.catering.identity.application.dto.out.TokenResponse;
+import ru.itmo.highload.catering.identity.application.ports.TokenIssuer;
 import ru.itmo.highload.catering.identity.domain.model.AppUser;
 import ru.itmo.highload.catering.identity.domain.model.RoleCode;
 
@@ -81,7 +81,8 @@ public class JwtTokenService implements TokenIssuer {
     private OAuth2TokenValidatorResult claims(Jwt jwt) {
         try {
             Object type = jwt.getHeaders().get("typ");
-            if (!"HS256".equals(jwt.getHeaders().get("alg")) || (type != null && !"JWT".equals(type))) {
+            if (!"HS256".equals(jwt.getHeaders().get("alg"))
+                    || (type != null && !"JWT".equals(type))) {
                 throw new IllegalArgumentException();
             }
             UUID.fromString(jwt.getSubject());

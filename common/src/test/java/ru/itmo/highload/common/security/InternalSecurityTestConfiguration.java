@@ -11,9 +11,17 @@ import reactor.core.publisher.Mono;
 public class InternalSecurityTestConfiguration {
     @Bean
     WebTestClientBuilderCustomizer testBearer() {
-        return builder -> builder.filter(ExchangeFilterFunction.ofRequestProcessor(request -> Mono.just(
-                ClientRequest.from(request).headers(headers -> {
-                    if (!headers.containsKey("Authorization")) headers.set("Authorization", TestTokens.bearer());
-                }).build())));
+        return builder ->
+                builder.filter(
+                        ExchangeFilterFunction.ofRequestProcessor(request ->
+                                Mono.just(
+                                        ClientRequest.from(request)
+                                                .headers(headers -> {
+                                                    if (!headers.containsKey("Authorization"))
+                                                        headers.set(
+                                                                "Authorization",
+                                                                TestTokens.bearer());
+                                                })
+                                                .build())));
     }
 }

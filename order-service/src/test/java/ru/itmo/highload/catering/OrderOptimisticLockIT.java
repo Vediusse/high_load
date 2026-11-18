@@ -2,11 +2,9 @@ package ru.itmo.highload.catering;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -17,50 +15,47 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import ru.itmo.highload.catering.CatalogFixture.Dish;
+import ru.itmo.highload.catering.order.application.OrderService;
 import ru.itmo.highload.catering.order.application.dto.in.CreateOrderRequest;
 import ru.itmo.highload.catering.order.application.dto.in.OrderLineInput;
 import ru.itmo.highload.catering.order.application.dto.in.RejectOrderRequest;
 import ru.itmo.highload.catering.order.application.dto.in.ReplaceOrderLinesRequest;
 import ru.itmo.highload.catering.order.application.dto.in.UpdateOrderDetailsRequest;
 import ru.itmo.highload.catering.order.application.dto.out.OrderResponse;
-import ru.itmo.highload.catering.order.application.OrderService;
-import ru.itmo.highload.catering.organization.domain.model.DeliveryPoint;
-import ru.itmo.highload.catering.organization.domain.model.Organization;
 import ru.itmo.highload.catering.organization.adapters.out.persistence.DeliveryPointRepository;
 import ru.itmo.highload.catering.organization.adapters.out.persistence.OrganizationRepository;
+import ru.itmo.highload.catering.organization.domain.model.DeliveryPoint;
+import ru.itmo.highload.catering.organization.domain.model.Organization;
 import ru.itmo.highload.common.domain.BusinessFailure;
 
 @SpringBootTest
 class OrderOptimisticLockIT extends AbstractPostgresIT {
 
-    @Autowired
-    OrderService orderService;
+    @Autowired OrderService orderService;
 
-    @Autowired
-    OrganizationRepository organizationRepository;
+    @Autowired OrganizationRepository organizationRepository;
 
-    @Autowired
-    DeliveryPointRepository deliveryPointRepository;
-
+    @Autowired DeliveryPointRepository deliveryPointRepository;
 
     @Test
     void twoCommandsWithSameVersionProduceOneSuccessAndOneConflict() throws Exception {
-        Organization organization = organizationRepository.saveAndFlush(
-                new Organization("Альфа", "+79991234567"));
-        DeliveryPoint point = deliveryPointRepository.saveAndFlush(new DeliveryPoint(
-                organization,
-                "Главный офис",
-                "Адрес",
-                "Иван",
-                "+79991234568"));
+        Organization organization =
+                organizationRepository.saveAndFlush(new Organization("Альфа", "+79991234567"));
+        DeliveryPoint point =
+                deliveryPointRepository.saveAndFlush(
+                        new DeliveryPoint(
+                                organization, "Главный офис", "Адрес", "Иван", "+79991234568"));
         OffsetDateTime future = OffsetDateTime.now(ZoneOffset.UTC).plusDays(2);
-        OrderResponse draft = orderService.createDraft(new CreateOrderRequest(
-                organization.getId(), point.getId(), future, null));
+        OrderResponse draft =
+                orderService.createDraft(
+                        new CreateOrderRequest(organization.getId(), point.getId(), future, null));
 
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
-        Callable<String> first = command(ready, start, draft, point.getId(), future, "Первая команда");
-        Callable<String> second = command(ready, start, draft, point.getId(), future, "Вторая команда");
+        Callable<String> first =
+                command(ready, start, draft, point.getId(), future, "Первая команда");
+        Callable<String> second =
+                command(ready, start, draft, point.getId(), future, "Вторая команда");
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
@@ -82,26 +77,31 @@ class OrderOptimisticLockIT extends AbstractPostgresIT {
 
     @Test
     void concurrentKitchenDecisionsCreateExactlyOneDecisionAndOneHistoryRow() throws Exception {
-        Organization organization = organizationRepository.saveAndFlush(
-                new Organization("Альфа", "+79991234567"));
-        DeliveryPoint point = deliveryPointRepository.saveAndFlush(new DeliveryPoint(
-                organization,
-                "Главный офис",
-                "Адрес",
-                "Иван",
-                "+79991234568"));
+        Organization organization =
+                organizationRepository.saveAndFlush(new Organization("Альфа", "+79991234567"));
+        DeliveryPoint point =
+                deliveryPointRepository.saveAndFlush(
+                        new DeliveryPoint(
+                                organization, "Главный офис", "Адрес", "Иван", "+79991234568"));
         Dish dish = catalog.dish("Борщ", "180.00");
-        OrderResponse draft = orderService.createDraft(new CreateOrderRequest(
-                organization.getId(),
-                point.getId(),
-                OffsetDateTime.now(ZoneOffset.UTC).plusDays(2),
-                null));
-        OrderResponse withLines = orderService.replaceDraftLines(
-                draft.id(),
-                new ReplaceOrderLinesRequest(
-                        draft.version(),
-                        List.of(new OrderLineInput(dish.getId(), 2))), ru.itmo.highload.common.security.TestTokens.bearer());
-        OrderResponse submitted = orderService.submit(draft.id(), withLines.version(), ru.itmo.highload.common.security.TestTokens.bearer());
+        OrderResponse draft =
+                orderService.createDraft(
+                        new CreateOrderRequest(
+                                organization.getId(),
+                                point.getId(),
+                                OffsetDateTime.now(ZoneOffset.UTC).plusDays(2),
+                                null));
+        OrderResponse withLines =
+                orderService.replaceDraftLines(
+                        draft.id(),
+                        new ReplaceOrderLinesRequest(
+                                draft.version(), List.of(new OrderLineInput(dish.getId(), 2))),
+                        ru.itmo.highload.common.security.TestTokens.bearer());
+        OrderResponse submitted =
+                orderService.submit(
+                        draft.id(),
+                        withLines.version(),
+                        ru.itmo.highload.common.security.TestTokens.bearer());
 
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
@@ -124,14 +124,18 @@ class OrderOptimisticLockIT extends AbstractPostgresIT {
         OrderResponse stored = orderService.getOrder(submitted.id());
         assertThat(stored.status().name()).isIn("CONFIRMED", "REJECTED");
         assertThat(stored.version()).isEqualTo(submitted.version() + 1);
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM order_status_history WHERE order_id = ?",
-                Long.class,
-                submitted.id())).isEqualTo(2L);
-        assertThat(jdbcTemplate.queryForObject(
-                "SELECT count(*) FROM order_status_history WHERE order_id = ? AND from_status = 'SUBMITTED'",
-                Long.class,
-                submitted.id())).isEqualTo(1L);
+        assertThat(
+                        jdbcTemplate.queryForObject(
+                                "SELECT count(*) FROM order_status_history WHERE order_id = ?",
+                                Long.class,
+                                submitted.id()))
+                .isEqualTo(2L);
+        assertThat(
+                        jdbcTemplate.queryForObject(
+                                "SELECT count(*) FROM order_status_history WHERE order_id = ? AND from_status = 'SUBMITTED'",
+                                Long.class,
+                                submitted.id()))
+                .isEqualTo(1L);
     }
 
     private Callable<String> command(
@@ -148,10 +152,7 @@ class OrderOptimisticLockIT extends AbstractPostgresIT {
                 orderService.updateDraftDetails(
                         draft.id(),
                         new UpdateOrderDetailsRequest(
-                                pointId,
-                                future.plusHours(1),
-                                comment,
-                                draft.version()));
+                                pointId, future.plusHours(1), comment, draft.version()));
                 return "SUCCESS";
             } catch (BusinessFailure exception) {
                 return exception.code();
@@ -160,10 +161,7 @@ class OrderOptimisticLockIT extends AbstractPostgresIT {
     }
 
     private Callable<String> kitchenDecision(
-            CountDownLatch ready,
-            CountDownLatch start,
-            OrderResponse submitted,
-            boolean confirm) {
+            CountDownLatch ready, CountDownLatch start, OrderResponse submitted, boolean confirm) {
         return () -> {
             ready.countDown();
             start.await();

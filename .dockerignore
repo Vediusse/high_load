@@ -2,6 +2,9 @@
 .idea
 .env
 .env.*
+CREDENTIALS.local.md
+compose.override.yaml
+backups
 .mvn/wrapper/dists
 AI
 target

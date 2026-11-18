@@ -9,5 +9,4 @@ public record DeliveryPointResponse(
         String address,
         String contactName,
         String contactPhone,
-        boolean active) {
-}
+        boolean active) {}

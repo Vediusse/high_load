@@ -14,5 +14,4 @@ public interface OrganizationClient {
             @PathVariable UUID id,
             @RequestHeader("Authorization") String bearer,
             @RequestHeader("X-Trace-Id") String trace);
-
 }

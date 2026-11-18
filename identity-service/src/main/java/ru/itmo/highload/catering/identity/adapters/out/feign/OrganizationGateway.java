@@ -1,6 +1,5 @@
 package ru.itmo.highload.catering.identity.adapters.out.feign;
 
-import ru.itmo.highload.catering.identity.application.ports.OrganizationVerifier;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.FeignException;
@@ -11,8 +10,8 @@ import org.slf4j.MDC;
 import org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import ru.itmo.highload.catering.identity.adapters.out.feign.OrganizationClient;
 import ru.itmo.highload.catering.identity.adapters.out.feign.dto.out.OrganizationResponse;
+import ru.itmo.highload.catering.identity.application.ports.OrganizationVerifier;
 import ru.itmo.highload.common.dto.out.ApiError;
 import ru.itmo.highload.common.error.ApiException;
 

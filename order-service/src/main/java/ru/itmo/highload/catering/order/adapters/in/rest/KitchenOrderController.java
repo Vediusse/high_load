@@ -7,16 +7,21 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.itmo.highload.catering.order.application.KitchenCommands;
+import ru.itmo.highload.catering.order.application.OrderService;
 import ru.itmo.highload.catering.order.application.dto.in.KitchenCommand;
 import ru.itmo.highload.catering.order.application.dto.in.OrderStatesRequest;
 import ru.itmo.highload.catering.order.application.dto.out.OrderResponse;
 import ru.itmo.highload.catering.order.application.dto.out.OrderState;
-import ru.itmo.highload.catering.order.application.KitchenCommands;
-import ru.itmo.highload.catering.order.application.OrderService;
-import ru.itmo.highload.catering.order.application.OrderAccess;
 import ru.itmo.highload.common.dto.out.PageResponse;
 import ru.itmo.highload.common.web.BlockingRequests;
 import ru.itmo.highload.common.web.Pagination;
@@ -32,15 +37,20 @@ public class KitchenOrderController {
 
     @PostMapping("/states")
     @PreAuthorize("hasRole('KITCHEN_MANAGER')")
-    public Flux<OrderState> states(@Valid @RequestBody OrderStatesRequest request, @AuthenticationPrincipal Jwt actor) {
-        return blocking.call(() -> orders.states(request.ids(), OrderActor.from(actor))).flatMapMany(Flux::fromIterable);
+    public Flux<OrderState> states(
+            @Valid @RequestBody OrderStatesRequest request, @AuthenticationPrincipal Jwt actor) {
+        return blocking.call(() -> orders.states(request.ids(), OrderActor.from(actor)))
+                .flatMapMany(Flux::fromIterable);
     }
 
     @GetMapping("/kitchen")
     @PreAuthorize("hasRole('KITCHEN_MANAGER')")
-    public Mono<PageResponse<OrderResponse>> queue(@RequestParam(defaultValue = "0") int page,
-                                                 @RequestParam(defaultValue = "20") int size, @AuthenticationPrincipal Jwt actor) {
-        return blocking.call(() -> orders.kitchenQueue(Pagination.query(page, size), OrderActor.from(actor)));
+    public Mono<PageResponse<OrderResponse>> queue(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt actor) {
+        return blocking.call(
+                () -> orders.kitchenQueue(Pagination.query(page, size), OrderActor.from(actor)));
     }
 
     @GetMapping("/{id}")
@@ -52,7 +62,9 @@ public class KitchenOrderController {
     @PostMapping("/{id}/kitchen-commands")
     @PreAuthorize("hasRole('KITCHEN_MANAGER')")
     public Mono<OrderResponse> command(
-            @PathVariable UUID id, @Valid @RequestBody KitchenCommand request, @AuthenticationPrincipal Jwt actor) {
+            @PathVariable UUID id,
+            @Valid @RequestBody KitchenCommand request,
+            @AuthenticationPrincipal Jwt actor) {
         return blocking.call(() -> commands.execute(id, request, OrderActor.from(actor)));
     }
 }

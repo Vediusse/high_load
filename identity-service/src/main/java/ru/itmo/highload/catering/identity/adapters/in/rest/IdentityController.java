@@ -24,15 +24,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
+import ru.itmo.highload.catering.identity.application.UserService;
 import ru.itmo.highload.catering.identity.application.dto.in.CreateUserRequest;
 import ru.itmo.highload.catering.identity.application.dto.in.UpdateUserRolesRequest;
 import ru.itmo.highload.catering.identity.application.dto.out.CurrentUserResponse;
 import ru.itmo.highload.catering.identity.application.dto.out.UserResponse;
-import ru.itmo.highload.catering.identity.application.UserService;
 import ru.itmo.highload.common.config.StandardApiErrors;
 import ru.itmo.highload.common.dto.out.ApiError;
 import ru.itmo.highload.common.dto.out.PageResponse;
 import ru.itmo.highload.common.web.BlockingRequests;
+import ru.itmo.highload.common.web.Pagination;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -69,10 +70,9 @@ public class IdentityController {
             @AuthenticationPrincipal Jwt actor,
             ServerHttpResponse response) {
         return blocking.call(() -> users.create(request, actors.from(actor)))
-                .doOnNext(
-                        user ->
-                                response.getHeaders()
-                                        .setLocation(URI.create("/api/v1/users/" + user.id())));
+                .doOnNext(user ->
+                        response.getHeaders()
+                                .setLocation(URI.create("/api/v1/users/" + user.id())));
     }
 
     @GetMapping("/users/{id}")
@@ -86,7 +86,7 @@ public class IdentityController {
     public Mono<PageResponse<UserResponse>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return blocking.call(() -> users.list(ru.itmo.highload.common.web.Pagination.query(page, size)));
+        return blocking.call(() -> users.list(Pagination.query(page, size)));
     }
 
     @PutMapping("/users/{id}/roles")
@@ -109,5 +109,4 @@ public class IdentityController {
     public Mono<CurrentUserResponse> me(@AuthenticationPrincipal Jwt actor) {
         return blocking.call(() -> users.current(IdentityActors.claims(actor)));
     }
-
 }

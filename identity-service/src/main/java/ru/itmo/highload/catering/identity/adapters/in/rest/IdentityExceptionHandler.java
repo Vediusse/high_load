@@ -10,6 +10,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ServerWebExchange;
+import ru.itmo.highload.catering.identity.domain.InvalidIdentityToken;
 import ru.itmo.highload.common.dto.out.ApiError;
 import ru.itmo.highload.common.error.ErrorResponses;
 
@@ -37,7 +38,7 @@ public class IdentityExceptionHandler {
                 exchange);
     }
 
-    @ExceptionHandler({BadCredentialsException.class, ru.itmo.highload.catering.identity.domain.InvalidIdentityToken.class})
+    @ExceptionHandler({BadCredentialsException.class, InvalidIdentityToken.class})
     public ApiError invalidToken(RuntimeException error, ServerWebExchange exchange) {
         exchange.getResponse().getHeaders().set(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
         return ErrorResponses.response(

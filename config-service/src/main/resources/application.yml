@@ -8,7 +8,7 @@ spring:
       server:
         git:
           uri: ${CONFIG_REPO_URI:https://github.com/Vediusse/high_load_configs.git}
-          default-label: ${CONFIG_REPO_LABEL:main}
+          default-label: ${CONFIG_REPO_LABEL:lab4}
           try-master-branch: false
           search-paths: '{application}'
           clone-on-start: true

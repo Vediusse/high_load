@@ -13,12 +13,14 @@ import ru.itmo.highload.catering.order.domain.model.OrderStatus;
 
 public interface CorporateOrderRepository extends JpaRepository<CorporateOrder, UUID> {
 
-    Page<CorporateOrder> findByStatusIn(java.util.Collection<OrderStatus> statuses, Pageable pageable);
+    Page<CorporateOrder> findByStatusIn(
+            java.util.Collection<OrderStatus> statuses, Pageable pageable);
 
     @EntityGraph(attributePaths = "lines")
     Optional<CorporateOrder> findDetailedById(UUID id);
 
-    @Query("""
+    @Query(
+            """
             select o
             from CorporateOrder o
             where (:status is null or o.status = :status)
@@ -31,13 +33,6 @@ public interface CorporateOrderRepository extends JpaRepository<CorporateOrder, 
             @Param("excludeDraft") boolean excludeDraft,
             Pageable pageable);
 
-    @Query("""
-            select o from CorporateOrder o
-            where o.status in :statuses
-              and (:organizationId is null or o.organizationId = :organizationId)
-            """)
-    Page<CorporateOrder> findKitchenPage(
-            @Param("statuses") java.util.Collection<OrderStatus> statuses,
-            @Param("organizationId") UUID organizationId,
-            Pageable pageable);
+    Page<CorporateOrder> findByStatusInAndOrganizationId(
+            java.util.Collection<OrderStatus> statuses, UUID organizationId, Pageable pageable);
 }

@@ -11,5 +11,4 @@ public record DishResponse(
         BigDecimal currentPrice,
         boolean active,
         Set<UUID> categoryIds,
-        long version) {
-}
+        long version) {}

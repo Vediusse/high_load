@@ -11,5 +11,4 @@ public record OrderStatusHistoryResponse(
         OrderStatus toStatus,
         String reason,
         UUID changedBy,
-        OffsetDateTime changedAt) {
-}
+        OffsetDateTime changedAt) {}

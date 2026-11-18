@@ -2,5 +2,4 @@ package ru.itmo.highload.catering.organization.application.dto.out;
 
 import java.util.UUID;
 
-public record ActiveOrderParty(UUID organizationId, UUID deliveryPointId) {
-}
+public record ActiveOrderParty(UUID organizationId, UUID deliveryPointId) {}

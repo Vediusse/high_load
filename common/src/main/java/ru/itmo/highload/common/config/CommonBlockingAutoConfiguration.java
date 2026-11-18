@@ -2,7 +2,8 @@ package ru.itmo.highload.common.config;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import reactor.core.scheduler.Scheduler;
@@ -16,7 +17,8 @@ public class CommonBlockingAutoConfiguration {
     @Bean(destroyMethod = "dispose")
     @ConditionalOnMissingBean(name = "blockingRequestScheduler")
     Scheduler blockingRequestScheduler(BlockingProperties properties) {
-        return Schedulers.newBoundedElastic(properties.threads(), properties.queueCapacity(), properties.threadNamePrefix());
+        return Schedulers.newBoundedElastic(
+                properties.threads(), properties.queueCapacity(), properties.threadNamePrefix());
     }
 
     @Bean

@@ -4,8 +4,10 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.security.oauth2.jwt.Jwt;
 import ru.itmo.highload.catering.order.application.OrderAccess;
+
 public final class OrderActor {
-    private OrderActor() { }
+    private OrderActor() {}
+
     public static OrderAccess from(Jwt jwt) {
         List<String> roles = jwt.getClaimAsStringList("roles");
         boolean representative = roles.contains("ORGANIZATION_REPRESENTATIVE");
@@ -16,5 +18,4 @@ public final class OrderActor {
                 representative,
                 representative ? UUID.fromString(organization) : null);
     }
-
 }

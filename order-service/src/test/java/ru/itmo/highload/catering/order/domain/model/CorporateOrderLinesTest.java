@@ -20,16 +20,18 @@ class CorporateOrderLinesTest {
         UUID soup = UUID.randomUUID();
         UUID main = UUID.randomUUID();
 
-        order.replaceLines(List.of(
-                new CorporateOrder.DraftLine(soup, 2, new BigDecimal("180.00")),
-                new CorporateOrder.DraftLine(main, 3, new BigDecimal("320.00"))));
+        order.replaceLines(
+                List.of(
+                        new CorporateOrder.DraftLine(soup, 2, new BigDecimal("180.00")),
+                        new CorporateOrder.DraftLine(main, 3, new BigDecimal("320.00"))));
 
         assertThat(order.getLines()).hasSize(2);
         assertThat(order.getTotalAmount()).isEqualByComparingTo("1320.00");
-        assertThat(order.getLines()).allSatisfy(line -> {
-            assertThat(line.getUnitPriceSnapshot()).isNull();
-            assertThat(line.getLineAmount()).isNull();
-        });
+        assertThat(order.getLines())
+                .allSatisfy(line -> {
+                    assertThat(line.getUnitPriceSnapshot()).isNull();
+                    assertThat(line.getLineAmount()).isNull();
+                });
     }
 
     @Test
@@ -37,15 +39,20 @@ class CorporateOrderLinesTest {
         CorporateOrder order = draft(NOW.plusSeconds(3600));
         UUID existingDish = UUID.randomUUID();
         UUID duplicateDish = UUID.randomUUID();
-        order.replaceLines(List.of(
-                new CorporateOrder.DraftLine(existingDish, 2, new BigDecimal("100.00"))));
+        order.replaceLines(
+                List.of(new CorporateOrder.DraftLine(existingDish, 2, new BigDecimal("100.00"))));
 
-        assertThatThrownBy(() -> order.replaceLines(List.of(
-                new CorporateOrder.DraftLine(duplicateDish, 1, new BigDecimal("200.00")),
-                new CorporateOrder.DraftLine(duplicateDish, 2, new BigDecimal("200.00")))))
+        assertThatThrownBy(() ->
+                        order.replaceLines(
+                                List.of(
+                                        new CorporateOrder.DraftLine(
+                                                duplicateDish, 1, new BigDecimal("200.00")),
+                                        new CorporateOrder.DraftLine(
+                                                duplicateDish, 2, new BigDecimal("200.00")))))
                 .isInstanceOf(CorporateOrder.DuplicateDishException.class);
 
-        assertThat(order.getLines()).singleElement()
+        assertThat(order.getLines())
+                .singleElement()
                 .satisfies(line -> assertThat(line.getDishId()).isEqualTo(existingDish));
         assertThat(order.getTotalAmount()).isEqualByComparingTo("200.00");
     }
@@ -58,8 +65,8 @@ class CorporateOrderLinesTest {
         assertThatThrownBy(() -> new CorporateOrder.DraftLine(dishId, 0, new BigDecimal("10.00")))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        order.replaceLines(List.of(
-                new CorporateOrder.DraftLine(dishId, 1, new BigDecimal("10.00"))));
+        order.replaceLines(
+                List.of(new CorporateOrder.DraftLine(dishId, 1, new BigDecimal("10.00"))));
         order.submit(
                 Map.of(dishId, new CorporateOrder.DishSnapshot("Суп", new BigDecimal("10.00"))),
                 NOW);
@@ -69,6 +76,7 @@ class CorporateOrderLinesTest {
     }
 
     private CorporateOrder draft(Instant deliveryAt) {
-        return new CorporateOrder(UUID.randomUUID(), UUID.randomUUID(), deliveryAt, null, NOW.minusSeconds(60));
+        return new CorporateOrder(
+                UUID.randomUUID(), UUID.randomUUID(), deliveryAt, null, NOW.minusSeconds(60));
     }
 }

@@ -21,10 +21,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
+import ru.itmo.highload.catering.catalog.application.CatalogService;
 import ru.itmo.highload.catering.catalog.application.dto.in.CreateCategoryRequest;
 import ru.itmo.highload.catering.catalog.application.dto.in.UpdateCategoryRequest;
 import ru.itmo.highload.catering.catalog.application.dto.out.CategoryResponse;
-import ru.itmo.highload.catering.catalog.application.CatalogService;
 import ru.itmo.highload.common.config.StandardApiErrors;
 import ru.itmo.highload.common.dto.out.PageResponse;
 import ru.itmo.highload.common.web.Pagination;
@@ -43,27 +43,31 @@ public class CategoryController {
     @Operation(summary = "Создать категорию")
     @ApiResponse(responseCode = "201", description = "Категория создана")
     @ResponseStatus(HttpStatus.CREATED)
-    public Mono<CategoryResponse> create(@Valid @RequestBody CreateCategoryRequest request, ServerHttpResponse httpResponse) {
-        return catalogService.createCategory(request).doOnNext(response ->
-                httpResponse.getHeaders().setLocation(URI.create("/api/v1/categories/" + response.id())));
+    public Mono<CategoryResponse> create(
+            @Valid @RequestBody CreateCategoryRequest request, ServerHttpResponse httpResponse) {
+        return catalogService
+                .createCategory(request)
+                .doOnNext(response ->
+                        httpResponse
+                                .getHeaders()
+                                .setLocation(URI.create("/api/v1/categories/" + response.id())));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ORGANIZATION_REPRESENTATIVE', 'CLIENT_MANAGER', 'KITCHEN_MANAGER')")
+    @PreAuthorize(
+            "hasAnyRole('SUPERVISOR', 'ORGANIZATION_REPRESENTATIVE', 'CLIENT_MANAGER', 'KITCHEN_MANAGER')")
     @Operation(summary = "Получить страницу категорий")
     public Mono<PageResponse<CategoryResponse>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Pagination.pageRequest(page, size);
-        return catalogService.listCategories(page, size);
+        return catalogService.listCategories(Pagination.query(page, size));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('KITCHEN_MANAGER')")
     @Operation(summary = "Изменить категорию")
     public Mono<CategoryResponse> update(
-            @PathVariable UUID id,
-            @Valid @RequestBody UpdateCategoryRequest request) {
+            @PathVariable UUID id, @Valid @RequestBody UpdateCategoryRequest request) {
         return catalogService.updateCategory(id, request);
     }
 

@@ -10,12 +10,13 @@ class OrganizationTest {
     @Test
     void managesOrganizationAndItsDeliveryPoint() {
         Organization organization = new Organization("  Альфа  ", "+79991234567");
-        DeliveryPoint point = new DeliveryPoint(
-                organization,
-                "  Главный офис  ",
-                "Невский проспект, 1",
-                "Анна",
-                "+79997654321");
+        DeliveryPoint point =
+                new DeliveryPoint(
+                        organization,
+                        "  Главный офис  ",
+                        "Невский проспект, 1",
+                        "Анна",
+                        "+79997654321");
 
         organization.addDeliveryPoint(point);
         organization.update("Альфа Плюс", "+79990000000");

@@ -13,7 +13,8 @@ class DishTest {
     void createsActiveDishAndTrimsName() {
         Category category = new Category("Основные блюда");
 
-        Dish dish = new Dish("  Котлета  ", "С гарниром", new BigDecimal("320.00"), Set.of(category));
+        Dish dish =
+                new Dish("  Котлета  ", "С гарниром", new BigDecimal("320.00"), Set.of(category));
 
         assertThat(dish.getId()).isNotNull();
         assertThat(dish.getName()).isEqualTo("Котлета");

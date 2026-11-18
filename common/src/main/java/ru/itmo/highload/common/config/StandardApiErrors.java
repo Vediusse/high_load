@@ -18,32 +18,49 @@ import ru.itmo.highload.common.dto.out.ApiError;
             responseCode = "400",
             description = "Запрос не прошёл синтаксическую или полевую валидацию",
             headers = @Header(name = "X-Trace-Id", description = "Идентификатор запроса"),
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class))),
     @ApiResponse(
             responseCode = "404",
             description = "Запрошенный ресурс не найден",
             headers = @Header(name = "X-Trace-Id", description = "Идентификатор запроса"),
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class))),
     @ApiResponse(
             responseCode = "409",
             description = "Конфликт состояния, уникальности или версии ресурса",
             headers = @Header(name = "X-Trace-Id", description = "Идентификатор запроса"),
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class))),
     @ApiResponse(
             responseCode = "422",
             description = "Запрос нарушает бизнес-инвариант",
             headers = @Header(name = "X-Trace-Id", description = "Идентификатор запроса"),
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class))),
     @ApiResponse(
             responseCode = "503",
             description = "Сервис временно недоступен или занят",
             headers = @Header(name = "X-Trace-Id", description = "Идентификатор запроса"),
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class))),
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class))),
     @ApiResponse(
             responseCode = "500",
             description = "Непредвиденная внутренняя ошибка",
             headers = @Header(name = "X-Trace-Id", description = "Идентификатор запроса"),
-            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ApiError.class)))
 })
-public @interface StandardApiErrors {
-}
+public @interface StandardApiErrors {}

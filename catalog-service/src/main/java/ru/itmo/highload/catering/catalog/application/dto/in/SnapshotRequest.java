@@ -5,5 +5,4 @@ import jakarta.validation.constraints.Size;
 import java.util.Set;
 import java.util.UUID;
 
-public record SnapshotRequest(@NotNull @Size(max = 1000) Set<@NotNull UUID> ids) {
-}
+public record SnapshotRequest(@NotNull @Size(max = 1000) Set<@NotNull UUID> ids) {}

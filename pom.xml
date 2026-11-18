@@ -1,4 +1,4 @@
-<?xml version="1.0" ?>
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
@@ -28,6 +28,9 @@
         <jacoco.version>0.8.15</jacoco.version>
         <springdoc.version>2.8.17</springdoc.version>
         <spring-cloud.version>2025.0.3</spring-cloud.version>
+        <spotless.version>3.11.0</spotless.version>
+        <google-java-format.version>2.0.0</google-java-format.version>
+        <maven-pmd.version>3.28.0</maven-pmd.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -93,11 +96,11 @@
                         </execution>
                         <execution>
                             <id>report-and-check</id>
-                            <phase>verify</phase>
                             <goals>
                                 <goal>report</goal>
                                 <goal>check</goal>
                             </goals>
+                            <phase>verify</phase>
                             <configuration>
                                 <rules>
                                     <rule>
@@ -122,10 +125,10 @@
                     <executions>
                         <execution>
                             <id>test-report</id>
-                            <phase>verify</phase>
                             <goals>
                                 <goal>report-only</goal>
                             </goals>
+                            <phase>verify</phase>
                             <configuration>
                                 <reportsDirectories>
                                     <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
@@ -139,5 +142,61 @@
                 </plugin>
             </plugins>
         </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.version}</version>
+                <configuration>
+                    <java>
+                        <forbidWildcardImports/>
+                        <shortenFullyQualifiedTypes/>
+                        <removeUnusedImports/>
+                        <googleJavaFormat>
+                            <version>${google-java-format.version}</version>
+                            <style>AOSP</style>
+                        </googleJavaFormat>
+                    </java>
+                    <pom>
+                        <sortPom>
+                            <nrOfIndentSpace>4</nrOfIndentSpace>
+                            <expandEmptyElements>false</expandEmptyElements>
+                        </sortPom>
+                    </pom>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>format-check</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <phase>validate</phase>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-pmd-plugin</artifactId>
+                <version>${maven-pmd.version}</version>
+                <configuration>
+                    <rulesets>
+                        <ruleset>${maven.multiModuleProjectDirectory}/config/quality/pmd.xml</ruleset>
+                    </rulesets>
+                    <linkXRef>false</linkXRef>
+                    <includeTests>false</includeTests>
+                    <analysisCache>true</analysisCache>
+                    <printFailingErrors>true</printFailingErrors>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>static-analysis</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <phase>verify</phase>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 </project>

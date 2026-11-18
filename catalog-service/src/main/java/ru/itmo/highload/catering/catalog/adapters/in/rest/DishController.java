@@ -21,11 +21,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
+import ru.itmo.highload.catering.catalog.application.CatalogService;
 import ru.itmo.highload.catering.catalog.application.dto.in.CreateDishRequest;
 import ru.itmo.highload.catering.catalog.application.dto.in.UpdateDishRequest;
 import ru.itmo.highload.catering.catalog.application.dto.out.DishCursorPageResponse;
 import ru.itmo.highload.catering.catalog.application.dto.out.DishResponse;
-import ru.itmo.highload.catering.catalog.application.CatalogService;
 import ru.itmo.highload.common.config.StandardApiErrors;
 import ru.itmo.highload.common.web.Pagination;
 
@@ -43,13 +43,19 @@ public class DishController {
     @Operation(summary = "Создать блюдо")
     @ApiResponse(responseCode = "201", description = "Блюдо создано")
     @ResponseStatus(HttpStatus.CREATED)
-    public Mono<DishResponse> create(@Valid @RequestBody CreateDishRequest request, ServerHttpResponse httpResponse) {
-        return catalogService.createDish(request).doOnNext(response ->
-                httpResponse.getHeaders().setLocation(URI.create("/api/v1/dishes/" + response.id())));
+    public Mono<DishResponse> create(
+            @Valid @RequestBody CreateDishRequest request, ServerHttpResponse httpResponse) {
+        return catalogService
+                .createDish(request)
+                .doOnNext(response ->
+                        httpResponse
+                                .getHeaders()
+                                .setLocation(URI.create("/api/v1/dishes/" + response.id())));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ORGANIZATION_REPRESENTATIVE', 'CLIENT_MANAGER', 'KITCHEN_MANAGER')")
+    @PreAuthorize(
+            "hasAnyRole('SUPERVISOR', 'ORGANIZATION_REPRESENTATIVE', 'CLIENT_MANAGER', 'KITCHEN_MANAGER')")
     @Operation(summary = "Получить блюдо")
     public Mono<DishResponse> get(@PathVariable UUID id) {
         return catalogService.getDish(id);
@@ -59,8 +65,7 @@ public class DishController {
     @PreAuthorize("hasRole('KITCHEN_MANAGER')")
     @Operation(summary = "Изменить блюдо")
     public Mono<DishResponse> update(
-            @PathVariable UUID id,
-            @Valid @RequestBody UpdateDishRequest request) {
+            @PathVariable UUID id, @Valid @RequestBody UpdateDishRequest request) {
         return catalogService.updateDish(id, request);
     }
 
@@ -74,7 +79,8 @@ public class DishController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ORGANIZATION_REPRESENTATIVE', 'CLIENT_MANAGER', 'KITCHEN_MANAGER')")
+    @PreAuthorize(
+            "hasAnyRole('SUPERVISOR', 'ORGANIZATION_REPRESENTATIVE', 'CLIENT_MANAGER', 'KITCHEN_MANAGER')")
     @Operation(summary = "Получить активное меню cursor-страницей без total")
     public Mono<DishCursorPageResponse> list(
             @RequestParam(required = false) UUID afterId,

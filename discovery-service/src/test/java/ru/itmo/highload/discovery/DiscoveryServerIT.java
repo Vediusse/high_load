@@ -1,28 +1,41 @@
 package ru.itmo.highload.discovery;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.netflix.eureka.cluster.PeerEurekaNodes;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.http.*;
-import static org.assertj.core.api.Assertions.assertThat;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         useMainMethod = SpringBootTest.UseMainMethod.ALWAYS,
-        properties = {"spring.cloud.config.enabled=false",
-                "spring.config.import=classpath:discovery-config/application.yml,classpath:discovery-config/discovery-service.yml"})
+        properties = {
+            "spring.cloud.config.enabled=false",
+            "spring.config.import=classpath:discovery-config/application.yml,classpath:discovery-config/discovery-service.yml"
+        })
 class DiscoveryServerIT {
     @Autowired TestRestTemplate http;
-    @Autowired com.netflix.eureka.cluster.PeerEurekaNodes peers;
+    @Autowired PeerEurekaNodes peers;
 
-    @Test void standaloneRegistryDoesNotCreateReplicationPeers() {
+    @Test
+    void standaloneRegistryDoesNotCreateReplicationPeers() {
         assertThat(peers.getPeerEurekaNodes()).isEmpty();
     }
 
-    @Test void exposesRegistry() {
+    @Test
+    void exposesRegistry() {
         HttpHeaders headers = new HttpHeaders();
-        headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
-        var result = http.exchange("/eureka/apps", HttpMethod.GET, new HttpEntity<>(headers), String.class);
+        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+        var result =
+                http.exchange(
+                        "/eureka/apps", HttpMethod.GET, new HttpEntity<>(headers), String.class);
         assertThat(result.getStatusCode().value()).isEqualTo(200);
         assertThat(result.getBody()).contains("applications");
     }

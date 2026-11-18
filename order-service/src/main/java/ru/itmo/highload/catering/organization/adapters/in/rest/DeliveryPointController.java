@@ -18,9 +18,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
+import ru.itmo.highload.catering.organization.application.OrganizationService;
 import ru.itmo.highload.catering.organization.application.dto.in.UpdateDeliveryPointRequest;
 import ru.itmo.highload.catering.organization.application.dto.out.DeliveryPointResponse;
-import ru.itmo.highload.catering.organization.application.OrganizationService;
 import ru.itmo.highload.common.config.StandardApiErrors;
 import ru.itmo.highload.common.web.BlockingRequests;
 
@@ -40,8 +40,11 @@ public class DeliveryPointController {
     @Operation(summary = "Изменить точку выдачи")
     public Mono<DeliveryPointResponse> update(
             @PathVariable UUID id,
-            @Valid @RequestBody UpdateDeliveryPointRequest request, @AuthenticationPrincipal Jwt actor) {
-        return blocking.call(() -> organizationService.updateDeliveryPoint(id, request, representativeOrganizationId(actor)));
+            @Valid @RequestBody UpdateDeliveryPointRequest request,
+            @AuthenticationPrincipal Jwt actor) {
+        return blocking.call(() ->
+                organizationService.updateDeliveryPoint(
+                        id, request, representativeOrganizationId(actor)));
     }
 
     @DeleteMapping("/{id}")

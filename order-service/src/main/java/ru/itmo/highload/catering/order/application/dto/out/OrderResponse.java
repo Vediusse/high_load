@@ -16,5 +16,4 @@ public record OrderResponse(
         String comment,
         long version,
         OffsetDateTime createdAt,
-        List<OrderLineResponse> lines) {
-}
+        List<OrderLineResponse> lines) {}

@@ -49,7 +49,8 @@ public class CorporateOrder {
         this.id = UUID.randomUUID();
         this.organizationId = requireId(organizationId, "Организация обязательна");
         this.deliveryPointId = requireId(deliveryPointId, "Точка выдачи обязательна");
-        this.requestedDeliveryAt = requireInstant(requestedDeliveryAt, "Время получения обязательно");
+        this.requestedDeliveryAt =
+                requireInstant(requestedDeliveryAt, "Время получения обязательно");
         this.comment = normalizeComment(comment);
         this.createdAt = requireInstant(createdAt, "Время создания обязательно");
         this.status = OrderStatus.DRAFT;
@@ -59,7 +60,8 @@ public class CorporateOrder {
     public void updateDetails(UUID deliveryPointId, Instant requestedDeliveryAt, String comment) {
         requireDraft("Детали заказа можно менять только в статусе DRAFT");
         this.deliveryPointId = requireId(deliveryPointId, "Точка выдачи обязательна");
-        this.requestedDeliveryAt = requireInstant(requestedDeliveryAt, "Время получения обязательно");
+        this.requestedDeliveryAt =
+                requireInstant(requestedDeliveryAt, "Время получения обязательно");
         this.comment = normalizeComment(comment);
     }
 
@@ -78,8 +80,11 @@ public class CorporateOrder {
             if (!uniqueDishIds.add(requestedLine.dishId())) {
                 throw new DuplicateDishException(requestedLine.dishId());
             }
-            preliminaryTotal = preliminaryTotal.add(
-                    requestedLine.currentPrice().multiply(BigDecimal.valueOf(requestedLine.quantity())));
+            preliminaryTotal =
+                    preliminaryTotal.add(
+                            requestedLine
+                                    .currentPrice()
+                                    .multiply(BigDecimal.valueOf(requestedLine.quantity())));
         }
 
         Map<UUID, OrderLine> existing = new HashMap<>();
@@ -110,7 +115,8 @@ public class CorporateOrder {
         if (lines.isEmpty()) {
             throw new EmptyOrderException();
         }
-        if (!requestedDeliveryAt.isAfter(requireInstant(submittedAt, "Время отправки обязательно"))) {
+        if (!requestedDeliveryAt.isAfter(
+                requireInstant(submittedAt, "Время отправки обязательно"))) {
             throw new DeliveryTimeNotFutureException();
         }
         for (OrderLine line : lines) {
@@ -128,7 +134,8 @@ public class CorporateOrder {
         OrderStatus previousStatus = status;
         totalAmount = finalTotal;
         status = OrderStatus.SUBMITTED;
-        history.add(new OrderStatusHistory(this, previousStatus, status, null, changedBy, submittedAt));
+        history.add(
+                new OrderStatusHistory(this, previousStatus, status, null, changedBy, submittedAt));
     }
 
     public void confirm(Instant changedAt) {
@@ -140,7 +147,8 @@ public class CorporateOrder {
                 OrderStatus.SUBMITTED,
                 OrderStatus.CONFIRMED,
                 null,
-                changedAt, changedBy,
+                changedAt,
+                changedBy,
                 "Подтвердить можно только заказ в статусе SUBMITTED");
     }
 
@@ -178,7 +186,8 @@ public class CorporateOrder {
                 OrderStatus.CONFIRMED,
                 OrderStatus.IN_COOKING,
                 null,
-                changedAt, changedBy,
+                changedAt,
+                changedBy,
                 "Начать приготовление можно только для заказа в статусе CONFIRMED");
     }
 
@@ -191,7 +200,8 @@ public class CorporateOrder {
                 OrderStatus.IN_COOKING,
                 OrderStatus.READY,
                 null,
-                changedAt, changedBy,
+                changedAt,
+                changedBy,
                 "Отметить готовность можно только для заказа в статусе IN_COOKING");
     }
 
@@ -204,7 +214,8 @@ public class CorporateOrder {
                 OrderStatus.READY,
                 OrderStatus.COMPLETED,
                 null,
-                changedAt, changedBy,
+                changedAt,
+                changedBy,
                 "Завершить заказ можно только из статуса READY");
     }
 
@@ -242,11 +253,14 @@ public class CorporateOrder {
         transitionTo(targetStatus, reason, changedAt, changedBy);
     }
 
-    private void transitionTo(OrderStatus targetStatus, String reason, Instant changedAt, UUID changedBy) {
+    private void transitionTo(
+            OrderStatus targetStatus, String reason, Instant changedAt, UUID changedBy) {
         Instant transitionTime = requireInstant(changedAt, "Время перехода обязательно");
         OrderStatus previousStatus = status;
         status = targetStatus;
-        history.add(new OrderStatusHistory(this, previousStatus, targetStatus, reason, changedBy, transitionTime));
+        history.add(
+                new OrderStatusHistory(
+                        this, previousStatus, targetStatus, reason, changedBy, transitionTime));
     }
 
     private static UUID requireId(UUID id, String message) {
@@ -303,7 +317,8 @@ public class CorporateOrder {
                 throw new IllegalArgumentException("Название блюда для снимка некорректно");
             }
             if (currentPrice == null || currentPrice.signum() <= 0 || currentPrice.scale() > 2) {
-                throw new IllegalArgumentException("Цена блюда для снимка должна быть положительной");
+                throw new IllegalArgumentException(
+                        "Цена блюда для снимка должна быть положительной");
             }
         }
     }

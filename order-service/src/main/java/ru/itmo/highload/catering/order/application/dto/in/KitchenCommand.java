@@ -9,5 +9,4 @@ public record KitchenCommand(
         @NotNull UUID commandId,
         @NotNull OrderStatus expectedStatus,
         @NotNull @PositiveOrZero Long expectedVersion,
-        @NotNull KitchenAction action) {
-}
+        @NotNull KitchenAction action) {}

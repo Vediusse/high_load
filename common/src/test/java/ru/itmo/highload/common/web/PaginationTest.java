@@ -19,9 +19,10 @@ class PaginationTest {
     void rejectsInvalidPageSizeAndLimit() {
         assertThatThrownBy(() -> Pagination.pageRequest(-1, 51))
                 .isInstanceOf(RequestValidationException.class)
-                .satisfies(exception -> assertThat(((RequestValidationException) exception).getFieldErrors())
-                        .extracting("field")
-                        .containsExactly("page", "size"));
+                .satisfies(exception ->
+                        assertThat(((RequestValidationException) exception).getFieldErrors())
+                                .extracting("field")
+                                .containsExactly("page", "size"));
         assertThatThrownBy(() -> Pagination.requireLimit(0))
                 .isInstanceOf(RequestValidationException.class);
     }

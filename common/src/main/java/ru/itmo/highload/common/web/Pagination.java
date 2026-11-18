@@ -3,20 +3,20 @@ package ru.itmo.highload.common.web;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.data.domain.PageRequest;
+import ru.itmo.highload.common.domain.PageQuery;
 import ru.itmo.highload.common.dto.out.FieldErrorResponse;
 import ru.itmo.highload.common.error.RequestValidationException;
 
 public final class Pagination {
-    public static ru.itmo.highload.common.domain.PageQuery query(int page, int size) {
+    public static PageQuery query(int page, int size) {
         validate(page, size);
-        return ru.itmo.highload.common.domain.PageQuery.of(page, size);
+        return PageQuery.of(page, size);
     }
 
     public static final int DEFAULT_SIZE = 20;
     public static final int MAX_SIZE = 50;
 
-    private Pagination() {
-    }
+    private Pagination() {}
 
     public static PageRequest pageRequest(int page, int size) {
         validate(page, size);
@@ -38,8 +38,8 @@ public final class Pagination {
 
     public static int requireLimit(int limit) {
         if (limit < 1 || limit > MAX_SIZE) {
-            throw new RequestValidationException(List.of(
-                    new FieldErrorResponse("limit", "должно быть от 1 до 50")));
+            throw new RequestValidationException(
+                    List.of(new FieldErrorResponse("limit", "должно быть от 1 до 50")));
         }
         return limit;
     }

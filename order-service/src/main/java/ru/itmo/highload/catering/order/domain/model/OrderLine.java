@@ -54,7 +54,9 @@ public class OrderLine {
     }
 
     public BigDecimal getLineAmount() {
-        return unitPriceSnapshot == null ? null : unitPriceSnapshot.multiply(BigDecimal.valueOf(quantity));
+        return unitPriceSnapshot == null
+                ? null
+                : unitPriceSnapshot.multiply(BigDecimal.valueOf(quantity));
     }
 
     private static void validateQuantity(int quantity) {

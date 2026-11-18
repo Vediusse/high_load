@@ -10,7 +10,6 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AppUser {
@@ -20,9 +19,7 @@ public class AppUser {
     private String login;
 
     @Getter(AccessLevel.NONE)
-
     private String passwordHash;
-
 
     private UserStatus status;
 
@@ -33,8 +30,6 @@ public class AppUser {
     private long version;
 
     @Getter(AccessLevel.NONE)
-
-
     private Set<Role> roles = new HashSet<>();
 
     public AppUser(String login, String passwordHash, Set<Role> roles, UUID organizationId) {

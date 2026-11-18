@@ -24,15 +24,16 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
+import ru.itmo.highload.catering.organization.application.OrganizationService;
 import ru.itmo.highload.catering.organization.application.dto.in.CreateDeliveryPointRequest;
 import ru.itmo.highload.catering.organization.application.dto.in.CreateOrganizationRequest;
 import ru.itmo.highload.catering.organization.application.dto.in.UpdateOrganizationRequest;
 import ru.itmo.highload.catering.organization.application.dto.out.DeliveryPointResponse;
 import ru.itmo.highload.catering.organization.application.dto.out.OrganizationPageResult;
 import ru.itmo.highload.catering.organization.application.dto.out.OrganizationResponse;
-import ru.itmo.highload.catering.organization.application.OrganizationService;
 import ru.itmo.highload.common.config.StandardApiErrors;
 import ru.itmo.highload.common.dto.out.PageResponse;
+import ru.itmo.highload.common.error.ApiException;
 import ru.itmo.highload.common.web.BlockingRequests;
 import ru.itmo.highload.common.web.Pagination;
 
@@ -53,11 +54,15 @@ public class OrganizationController {
     @ApiResponse(responseCode = "201", description = "Организация создана")
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<OrganizationResponse> create(
-            @Valid @RequestBody CreateOrganizationRequest request, ServerHttpResponse httpResponse, @AuthenticationPrincipal Jwt actor) {
+            @Valid @RequestBody CreateOrganizationRequest request,
+            ServerHttpResponse httpResponse,
+            @AuthenticationPrincipal Jwt actor) {
         return blocking.call(() -> {
             rejectRepresentativeCreate(actor);
             OrganizationResponse response = organizationService.createOrganization(request);
-            httpResponse.getHeaders().setLocation(URI.create("/api/v1/organizations/" + response.id()));
+            httpResponse
+                    .getHeaders()
+                    .setLocation(URI.create("/api/v1/organizations/" + response.id()));
             return response;
         });
     }
@@ -65,8 +70,10 @@ public class OrganizationController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ORGANIZATION_REPRESENTATIVE', 'CLIENT_MANAGER')")
     @Operation(summary = "Получить организацию")
-    public Mono<OrganizationResponse> get(@PathVariable UUID id, @AuthenticationPrincipal Jwt actor) {
-        return blocking.call(() -> organizationService.getOrganization(id, representativeOrganizationId(actor)));
+    public Mono<OrganizationResponse> get(
+            @PathVariable UUID id, @AuthenticationPrincipal Jwt actor) {
+        return blocking.call(
+                () -> organizationService.getOrganization(id, representativeOrganizationId(actor)));
     }
 
     @PutMapping("/{id}")
@@ -74,8 +81,11 @@ public class OrganizationController {
     @Operation(summary = "Изменить организацию")
     public Mono<OrganizationResponse> update(
             @PathVariable UUID id,
-            @Valid @RequestBody UpdateOrganizationRequest request, @AuthenticationPrincipal Jwt actor) {
-        return blocking.call(() -> organizationService.updateOrganization(id, request, representativeOrganizationId(actor)));
+            @Valid @RequestBody UpdateOrganizationRequest request,
+            @AuthenticationPrincipal Jwt actor) {
+        return blocking.call(() ->
+                organizationService.updateOrganization(
+                        id, request, representativeOrganizationId(actor)));
     }
 
     @DeleteMapping("/{id}")
@@ -99,10 +109,13 @@ public class OrganizationController {
             headers = @Header(name = "X-Total-Count", description = "Общее количество организаций"))
     public Mono<PageResponse<OrganizationResponse>> list(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size, ServerHttpResponse httpResponse, @AuthenticationPrincipal Jwt actor) {
+            @RequestParam(defaultValue = "20") int size,
+            ServerHttpResponse httpResponse,
+            @AuthenticationPrincipal Jwt actor) {
         return blocking.call(() -> {
-            OrganizationPageResult result = organizationService.listOrganizations(
-                    Pagination.query(page, size), representativeOrganizationId(actor));
+            OrganizationPageResult result =
+                    organizationService.listOrganizations(
+                            Pagination.query(page, size), representativeOrganizationId(actor));
             httpResponse.getHeaders().set("X-Total-Count", Long.toString(result.totalCount()));
             return result.body();
         });
@@ -115,11 +128,16 @@ public class OrganizationController {
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<DeliveryPointResponse> createDeliveryPoint(
             @PathVariable UUID organizationId,
-            @Valid @RequestBody CreateDeliveryPointRequest request, ServerHttpResponse httpResponse, @AuthenticationPrincipal Jwt actor) {
+            @Valid @RequestBody CreateDeliveryPointRequest request,
+            ServerHttpResponse httpResponse,
+            @AuthenticationPrincipal Jwt actor) {
         return blocking.call(() -> {
-            DeliveryPointResponse response = organizationService.createDeliveryPoint(
-                    organizationId, request, representativeOrganizationId(actor));
-            httpResponse.getHeaders().setLocation(URI.create("/api/v1/delivery-points/" + response.id()));
+            DeliveryPointResponse response =
+                    organizationService.createDeliveryPoint(
+                            organizationId, request, representativeOrganizationId(actor));
+            httpResponse
+                    .getHeaders()
+                    .setLocation(URI.create("/api/v1/delivery-points/" + response.id()));
             return response;
         });
     }
@@ -130,10 +148,13 @@ public class OrganizationController {
     public Mono<PageResponse<DeliveryPointResponse>> listDeliveryPoints(
             @PathVariable UUID organizationId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size, @AuthenticationPrincipal Jwt actor) {
-        return blocking.call(() -> organizationService.listDeliveryPoints(
-                    organizationId,
-                    Pagination.query(page, size), representativeOrganizationId(actor)));
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal Jwt actor) {
+        return blocking.call(() ->
+                organizationService.listDeliveryPoints(
+                        organizationId,
+                        Pagination.query(page, size),
+                        representativeOrganizationId(actor)));
     }
 
     private UUID representativeOrganizationId(Jwt actor) {
@@ -144,8 +165,10 @@ public class OrganizationController {
 
     private void rejectRepresentativeCreate(Jwt actor) {
         if (representativeOrganizationId(actor) != null) {
-            throw new ru.itmo.highload.common.error.ApiException(
-                    HttpStatus.FORBIDDEN, "ACCESS_DENIED", "Представитель не может создавать другую организацию");
+            throw new ApiException(
+                    HttpStatus.FORBIDDEN,
+                    "ACCESS_DENIED",
+                    "Представитель не может создавать другую организацию");
         }
     }
 }

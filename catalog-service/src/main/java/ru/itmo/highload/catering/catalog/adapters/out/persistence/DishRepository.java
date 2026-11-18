@@ -12,7 +12,8 @@ import ru.itmo.highload.catering.catalog.domain.model.DishCategory;
 
 public interface DishRepository extends ReactiveCrudRepository<DishRow, UUID> {
 
-    @Query("""
+    @Query(
+            """
             SELECT d.* FROM dish d
             WHERE d.active = true
               AND (CAST(:afterId AS uuid) IS NULL OR d.id > :afterId)
@@ -22,8 +23,10 @@ public interface DishRepository extends ReactiveCrudRepository<DishRow, UUID> {
               ))
             ORDER BY d.id LIMIT :limit
             """)
-    Flux<DishRow> findActivePage(@Param("afterId") UUID afterId, @Param("limit") int limit,
-                              @Param("categoryId") UUID categoryId);
+    Flux<DishRow> findActivePage(
+            @Param("afterId") UUID afterId,
+            @Param("limit") int limit,
+            @Param("categoryId") UUID categoryId);
 
     @Query("SELECT dish_id, category_id FROM dish_category WHERE dish_id IN (:ids)")
     Flux<DishCategory> findCategoryLinks(@Param("ids") Collection<UUID> ids);

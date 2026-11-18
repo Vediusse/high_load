@@ -7,10 +7,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
-import ru.itmo.highload.catering.organization.application.dto.out.OrganizationLookupResponse;
 import ru.itmo.highload.catering.organization.application.OrganizationService;
+import ru.itmo.highload.catering.organization.application.dto.out.OrganizationLookupResponse;
 import ru.itmo.highload.common.error.ApiException;
 import ru.itmo.highload.common.web.BlockingRequests;
 
@@ -24,10 +27,13 @@ public class InternalOrganizationController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('SUPERVISOR')")
-    public Mono<OrganizationLookupResponse> get(@PathVariable UUID id, @AuthenticationPrincipal Jwt actor) {
+    public Mono<OrganizationLookupResponse> get(
+            @PathVariable UUID id, @AuthenticationPrincipal Jwt actor) {
         if (actor.getClaimAsStringList("roles").contains("ORGANIZATION_REPRESENTATIVE")
                 && !id.toString().equals(actor.getClaimAsString("organizationId"))) {
-            return Mono.error(new ApiException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Организация не найдена"));
+            return Mono.error(
+                    new ApiException(
+                            HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "Организация не найдена"));
         }
         return blocking.call(() -> {
             var organization = organizations.getOrganization(id);

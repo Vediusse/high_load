@@ -2,13 +2,12 @@ package ru.itmo.highload.catering.kitchen.domain.model;
 
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import ru.itmo.highload.catering.kitchen.domain.model.OrderStatus;
-
 
 @Getter
-@NoArgsConstructor(access = lombok.AccessLevel.PROTECTED)
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class KitchenTask {
 
     private UUID orderId;

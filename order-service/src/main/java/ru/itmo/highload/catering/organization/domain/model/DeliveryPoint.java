@@ -53,14 +53,16 @@ public class DeliveryPoint {
 
     private static String requireText(String value, String label, int maxLength) {
         if (value == null || value.isBlank() || value.trim().length() > maxLength) {
-            throw new IllegalArgumentException(label + " не должно быть пустым и длиннее " + maxLength + " символов");
+            throw new IllegalArgumentException(
+                    label + " не должно быть пустым и длиннее " + maxLength + " символов");
         }
         return value.trim();
     }
 
     private static String requirePhone(String value) {
         if (value == null || !value.matches(PHONE_PATTERN)) {
-            throw new IllegalArgumentException("Телефон должен быть указан в формате E.164, например +79991234567");
+            throw new IllegalArgumentException(
+                    "Телефон должен быть указан в формате E.164, например +79991234567");
         }
         return value;
     }

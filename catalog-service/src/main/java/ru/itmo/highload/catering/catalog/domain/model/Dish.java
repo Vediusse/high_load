@@ -15,13 +15,9 @@ public class Dish {
 
     private UUID id;
 
-
     private String name;
 
-
     private String description;
-
-
 
     private BigDecimal currentPrice;
 
@@ -31,24 +27,30 @@ public class Dish {
 
     private Set<Category> categories = new LinkedHashSet<>();
 
-    public Dish(String name, String description, BigDecimal currentPrice, Set<Category> categories) {
+    public Dish(
+            String name, String description, BigDecimal currentPrice, Set<Category> categories) {
         this.id = UUID.randomUUID();
         this.active = true;
         update(name, description, currentPrice, categories);
     }
 
-    public void update(String name, String description, BigDecimal currentPrice, Set<Category> categories) {
+    public void update(
+            String name, String description, BigDecimal currentPrice, Set<Category> categories) {
         if (name == null || name.isBlank() || name.trim().length() > 200) {
-            throw new IllegalArgumentException("Название блюда не должно быть пустым и длиннее 200 символов");
+            throw new IllegalArgumentException(
+                    "Название блюда не должно быть пустым и длиннее 200 символов");
         }
         if (description == null || description.length() > 2000) {
-            throw new IllegalArgumentException("Описание блюда обязательно и не должно быть длиннее 2000 символов");
+            throw new IllegalArgumentException(
+                    "Описание блюда обязательно и не должно быть длиннее 2000 символов");
         }
         if (currentPrice == null || currentPrice.signum() <= 0 || currentPrice.scale() > 2) {
-            throw new IllegalArgumentException("Цена блюда должна быть положительной и содержать не более двух знаков после запятой");
+            throw new IllegalArgumentException(
+                    "Цена блюда должна быть положительной и содержать не более двух знаков после запятой");
         }
         if (categories == null || categories.stream().anyMatch(category -> category == null)) {
-            throw new IllegalArgumentException("Набор категорий не может быть null или содержать null");
+            throw new IllegalArgumentException(
+                    "Набор категорий не может быть null или содержать null");
         }
         this.name = name.trim();
         this.description = description;
@@ -69,10 +71,18 @@ public class Dish {
         return Collections.unmodifiableSet(categories);
     }
 
-    public Long getRevision() { return version; }
+    public Long getRevision() {
+        return version;
+    }
 
-    public static Dish restore(UUID id, String name, String description,
-            BigDecimal price, boolean active, Long version, Set<Category> categories) {
+    public static Dish restore(
+            UUID id,
+            String name,
+            String description,
+            BigDecimal price,
+            boolean active,
+            Long version,
+            Set<Category> categories) {
         Dish dish = new Dish();
         dish.id = id;
         dish.name = name;

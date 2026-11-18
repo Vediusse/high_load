@@ -1,143 +1,376 @@
 package ru.itmo.highload.catering;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.util.ClassUtils;
 import org.testcontainers.containers.PostgreSQLContainer;
 import reactor.test.StepVerifier;
-import ru.itmo.highload.catering.catalog.domain.model.Dish;
-import ru.itmo.highload.catering.catalog.domain.model.Category;
 import ru.itmo.highload.catering.catalog.adapters.out.persistence.CategoryRepository;
-import ru.itmo.highload.catering.catalog.adapters.out.persistence.DishRepository;
 import ru.itmo.highload.catering.catalog.adapters.out.persistence.CategoryRow;
+import ru.itmo.highload.catering.catalog.adapters.out.persistence.DishRepository;
 import ru.itmo.highload.catering.catalog.adapters.out.persistence.DishRow;
-import static org.assertj.core.api.Assertions.*;
+import ru.itmo.highload.catering.catalog.domain.model.Category;
+import ru.itmo.highload.catering.catalog.domain.model.Dish;
+import ru.itmo.highload.common.security.InternalSecurityTestConfiguration;
+import ru.itmo.highload.common.security.TestTokens;
+import ru.itmo.highload.common.web.BlockingRequests;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         useMainMethod = SpringBootTest.UseMainMethod.ALWAYS)
 @AutoConfigureWebTestClient
-@org.springframework.context.annotation.Import(ru.itmo.highload.common.security.InternalSecurityTestConfiguration.class)
+@org.springframework.context.annotation.Import(InternalSecurityTestConfiguration.class)
 class CatalogApiIT {
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17.11-alpine3.24");
-    static { POSTGRES.start(); }
+    static final PostgreSQLContainer<?> POSTGRES =
+            new PostgreSQLContainer<>("postgres:17.11-alpine3.24");
+
+    static {
+        POSTGRES.start();
+    }
+
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
-        ru.itmo.highload.common.security.TestTokens.register(registry);
-        registry.add("spring.r2dbc.url", () -> "r2dbc:postgresql://" + POSTGRES.getHost() + ":"
-                + POSTGRES.getMappedPort(5432) + "/" + POSTGRES.getDatabaseName());
+        TestTokens.register(registry);
+        registry.add(
+                "spring.r2dbc.url",
+                () ->
+                        "r2dbc:postgresql://"
+                                + POSTGRES.getHost()
+                                + ":"
+                                + POSTGRES.getMappedPort(5432)
+                                + "/"
+                                + POSTGRES.getDatabaseName());
         registry.add("spring.r2dbc.username", POSTGRES::getUsername);
         registry.add("spring.r2dbc.password", POSTGRES::getPassword);
         registry.add("spring.flyway.url", POSTGRES::getJdbcUrl);
         registry.add("spring.flyway.user", POSTGRES::getUsername);
         registry.add("spring.flyway.password", POSTGRES::getPassword);
     }
+
     @Autowired WebTestClient client;
     @Autowired R2dbcEntityTemplate template;
     @Autowired CategoryRepository categories;
     @Autowired DishRepository dishes;
-    @Autowired org.springframework.context.ApplicationContext context;
+    @Autowired ApplicationContext context;
 
-    @Test void sharedLibraryDoesNotEnableBlockingPersistenceInCatalog() {
-        assertThat(context.getBeansOfType(ru.itmo.highload.common.web.BlockingRequests.class)).isEmpty();
+    @Test
+    void sharedLibraryDoesNotEnableBlockingPersistenceInCatalog() {
+        assertThat(context.getBeansOfType(BlockingRequests.class)).isEmpty();
         assertThat(context.containsBean("blockingRequestScheduler")).isFalse();
-        assertThat(org.springframework.util.ClassUtils.isPresent("jakarta.persistence.Entity", getClass().getClassLoader()))
+        assertThat(ClassUtils.isPresent("jakarta.persistence.Entity", getClass().getClassLoader()))
                 .isFalse();
     }
-    @BeforeEach void clean() {
-        template.getDatabaseClient().sql("TRUNCATE dish_category, dish, category CASCADE").fetch().rowsUpdated().block();
+
+    @BeforeEach
+    void clean() {
+        template.getDatabaseClient()
+                .sql("TRUNCATE dish_category, dish, category CASCADE")
+                .fetch()
+                .rowsUpdated()
+                .block();
     }
 
-    @Test void menuIsReadableByClientManagerButOnlyKitchenManagerCanChangeIt() {
-        String clientManager = ru.itmo.highload.common.security.TestTokens.bearerWithRoles("CLIENT_MANAGER");
-        client.get().uri("/api/v1/dishes").header("Authorization", clientManager)
-                .exchange().expectStatus().isOk();
-        client.post().uri("/api/v1/categories").header("Authorization", clientManager)
+    @Test
+    void menuIsReadableByClientManagerButOnlyKitchenManagerCanChangeIt() {
+        String clientManager = TestTokens.bearerWithRoles("CLIENT_MANAGER");
+        client.get()
+                .uri("/api/v1/dishes")
+                .header("Authorization", clientManager)
+                .exchange()
+                .expectStatus()
+                .isOk();
+        client.post()
+                .uri("/api/v1/categories")
+                .header("Authorization", clientManager)
                 .bodyValue(Map.of("name", "Запрещённая категория"))
-                .exchange().expectStatus().isForbidden().expectBody().jsonPath("$.code").isEqualTo("ACCESS_DENIED");
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("ACCESS_DENIED");
     }
 
     JsonNode post(String path, Object body) {
-        return client.post().uri(path).bodyValue(body).exchange().expectStatus().isCreated()
-                .expectBody(JsonNode.class).returnResult().getResponseBody();
+        return client.post()
+                .uri(path)
+                .bodyValue(body)
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody();
     }
-    UUID category(String name) { return UUID.fromString(post("/api/v1/categories", Map.of("name", name)).get("id").asText()); }
+
+    UUID category(String name) {
+        return UUID.fromString(post("/api/v1/categories", Map.of("name", name)).get("id").asText());
+    }
+
     Map<String, Object> payload(String name, String price, Set<UUID> categories) {
-        return Map.of("name", name, "description", "Описание", "currentPrice", new BigDecimal(price), "categoryIds", categories);
+        return Map.of(
+                "name",
+                name,
+                "description",
+                "Описание",
+                "currentPrice",
+                new BigDecimal(price),
+                "categoryIds",
+                categories);
     }
+
     UUID dish(String name, String price, Set<UUID> categories) {
-        return UUID.fromString(post("/api/v1/dishes", payload(name, price, categories)).get("id").asText());
+        return UUID.fromString(
+                post("/api/v1/dishes", payload(name, price, categories)).get("id").asText());
     }
-    @Test void crudRelationsAndCursorPaginationPreserveOriginalContract() {
-        UUID soups = category("Супы"), mains = category("Основные блюда"), unused = category("Десерты");
+
+    @Test
+    void crudRelationsAndCursorPaginationPreserveOriginalContract() {
+        UUID soups = category("Супы"),
+                mains = category("Основные блюда"),
+                unused = category("Десерты");
         UUID borsch = dish("Борщ", "180.00", Set.of(soups));
         UUID cutlet = dish("Котлета", "320.00", Set.of(mains));
         UUID lunch = dish("Обед", "450.00", Set.of(soups, mains));
-        JsonNode first = client.get().uri("/api/v1/dishes?limit=2").exchange().expectStatus().isOk()
-                .expectHeader().doesNotExist("X-Total-Count").expectBody(JsonNode.class).returnResult().getResponseBody();
+        JsonNode first =
+                client.get()
+                        .uri("/api/v1/dishes?limit=2")
+                        .exchange()
+                        .expectStatus()
+                        .isOk()
+                        .expectHeader()
+                        .doesNotExist("X-Total-Count")
+                        .expectBody(JsonNode.class)
+                        .returnResult()
+                        .getResponseBody();
         assertThat(first.get("items")).hasSize(2);
         assertThat(first.get("hasNext").asBoolean()).isTrue();
         assertThat(first.has("total")).isFalse();
-        client.get().uri("/api/v1/dishes?limit=2&afterId=" + first.get("nextCursor").asText()).exchange()
-                .expectStatus().isOk().expectBody().jsonPath("$.items.length()").isEqualTo(1)
-                .jsonPath("$.hasNext").isEqualTo(false).jsonPath("$.nextCursor").isEmpty();
-        client.get().uri("/api/v1/dishes?categoryId=" + soups).exchange().expectStatus().isOk()
-                .expectBody().jsonPath("$.items[*].id").value(org.hamcrest.Matchers.containsInAnyOrder(borsch.toString(), lunch.toString()));
-        client.put().uri("/api/v1/dishes/" + cutlet).bodyValue(payload("Котлета с пюре", "350.00", Set.of(soups, mains)))
-                .exchange().expectStatus().isOk().expectBody().jsonPath("$.version").isEqualTo(1)
-                .jsonPath("$.name").isEqualTo("Котлета с пюре").jsonPath("$.currentPrice").isEqualTo(350.00)
-                .jsonPath("$.categoryIds.length()").isEqualTo(2);
-        client.delete().uri("/api/v1/categories/" + soups).exchange().expectStatus().isEqualTo(422)
-                .expectBody().jsonPath("$.code").isEqualTo("CATEGORY_IN_USE");
+        client.get()
+                .uri("/api/v1/dishes?limit=2&afterId=" + first.get("nextCursor").asText())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.items.length()")
+                .isEqualTo(1)
+                .jsonPath("$.hasNext")
+                .isEqualTo(false)
+                .jsonPath("$.nextCursor")
+                .isEmpty();
+        client.get()
+                .uri("/api/v1/dishes?categoryId=" + soups)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.items[*].id")
+                .value(Matchers.containsInAnyOrder(borsch.toString(), lunch.toString()));
+        client.put()
+                .uri("/api/v1/dishes/" + cutlet)
+                .bodyValue(payload("Котлета с пюре", "350.00", Set.of(soups, mains)))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.version")
+                .isEqualTo(1)
+                .jsonPath("$.name")
+                .isEqualTo("Котлета с пюре")
+                .jsonPath("$.currentPrice")
+                .isEqualTo(350.00)
+                .jsonPath("$.categoryIds.length()")
+                .isEqualTo(2);
+        client.delete()
+                .uri("/api/v1/categories/" + soups)
+                .exchange()
+                .expectStatus()
+                .isEqualTo(422)
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("CATEGORY_IN_USE");
         client.delete().uri("/api/v1/dishes/" + borsch).exchange().expectStatus().isNoContent();
         client.delete().uri("/api/v1/dishes/" + borsch).exchange().expectStatus().isNoContent();
-        client.get().uri("/api/v1/dishes/" + borsch).exchange().expectStatus().isOk()
-                .expectBody().jsonPath("$.active").isEqualTo(false).jsonPath("$.version").isEqualTo(1)
-                .jsonPath("$.categories").doesNotExist().jsonPath("$.hibernateLazyInitializer").doesNotExist();
-        client.get().uri("/api/v1/dishes?limit=50").exchange().expectStatus().isOk().expectBody().jsonPath("$.items.length()").isEqualTo(2);
-        client.put().uri("/api/v1/categories/" + unused).bodyValue(Map.of("name", "Выпечка"))
-                .exchange().expectStatus().isOk().expectBody().jsonPath("$.name").isEqualTo("Выпечка");
+        client.get()
+                .uri("/api/v1/dishes/" + borsch)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.active")
+                .isEqualTo(false)
+                .jsonPath("$.version")
+                .isEqualTo(1)
+                .jsonPath("$.categories")
+                .doesNotExist()
+                .jsonPath("$.hibernateLazyInitializer")
+                .doesNotExist();
+        client.get()
+                .uri("/api/v1/dishes?limit=50")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.items.length()")
+                .isEqualTo(2);
+        client.put()
+                .uri("/api/v1/categories/" + unused)
+                .bodyValue(Map.of("name", "Выпечка"))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.name")
+                .isEqualTo("Выпечка");
         client.delete().uri("/api/v1/categories/" + unused).exchange().expectStatus().isNoContent();
-        client.get().uri("/api/v1/categories?page=0&size=1").exchange().expectStatus().isOk()
-                .expectBody().jsonPath("$.items.length()").isEqualTo(1).jsonPath("$.hasNext").isEqualTo(true);
-        client.get().uri("/api/v1/categories?page=3&size=1").exchange().expectStatus().isOk().expectBody().jsonPath("$.items").isEmpty();
+        client.get()
+                .uri("/api/v1/categories?page=0&size=1")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.items.length()")
+                .isEqualTo(1)
+                .jsonPath("$.hasNext")
+                .isEqualTo(true);
+        client.get()
+                .uri("/api/v1/categories?page=3&size=1")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.items")
+                .isEmpty();
     }
-    @Test void stableErrorsAndTraceId() {
+
+    @Test
+    void stableErrorsAndTraceId() {
         UUID soups = category("Супы"), other = category("Обеды");
-        client.post().uri("/api/v1/categories").bodyValue(Map.of("name", " Супы ")).exchange()
-                .expectStatus().isEqualTo(409).expectBody().jsonPath("$.code").isEqualTo("CATEGORY_NAME_CONFLICT");
-        client.put().uri("/api/v1/categories/" + other).bodyValue(Map.of("name", "Супы")).exchange()
-                .expectStatus().isEqualTo(409).expectBody().jsonPath("$.code").isEqualTo("CATEGORY_NAME_CONFLICT");
-        client.post().uri("/api/v1/dishes").header("X-Trace-Id", "catalog-check").bodyValue(payload("Борщ", "0.00", Set.of()))
-                .exchange().expectStatus().isBadRequest().expectHeader().valueEquals("X-Trace-Id", "catalog-check")
-                .expectBody().jsonPath("$.code").isEqualTo("VALIDATION_FAILED").jsonPath("$.traceId").isEqualTo("catalog-check")
-                .jsonPath("$.fieldErrors[0].field").isEqualTo("currentPrice");
-        client.post().uri("/api/v1/dishes").bodyValue(payload("Щи", "190.00", Set.of(UUID.randomUUID())))
-                .exchange().expectStatus().isNotFound();
-        for (String path : List.of("/api/v1/dishes?limit=51", "/api/v1/categories?size=0", "/api/v1/categories?size=51", "/api/v1/categories?page=-1")) {
-            client.get().uri(path).exchange().expectStatus().isBadRequest().expectBody().jsonPath("$.code").isEqualTo("VALIDATION_FAILED");
+        client.post()
+                .uri("/api/v1/categories")
+                .bodyValue(Map.of("name", " Супы "))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("CATEGORY_NAME_CONFLICT");
+        client.put()
+                .uri("/api/v1/categories/" + other)
+                .bodyValue(Map.of("name", "Супы"))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(409)
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("CATEGORY_NAME_CONFLICT");
+        client.post()
+                .uri("/api/v1/dishes")
+                .header("X-Trace-Id", "catalog-check")
+                .bodyValue(payload("Борщ", "0.00", Set.of()))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectHeader()
+                .valueEquals("X-Trace-Id", "catalog-check")
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("VALIDATION_FAILED")
+                .jsonPath("$.traceId")
+                .isEqualTo("catalog-check")
+                .jsonPath("$.fieldErrors[0].field")
+                .isEqualTo("currentPrice");
+        client.post()
+                .uri("/api/v1/dishes")
+                .bodyValue(payload("Щи", "190.00", Set.of(UUID.randomUUID())))
+                .exchange()
+                .expectStatus()
+                .isNotFound();
+        for (String path :
+                List.of(
+                        "/api/v1/dishes?limit=51",
+                        "/api/v1/categories?size=0",
+                        "/api/v1/categories?size=51",
+                        "/api/v1/categories?page=-1")) {
+            client.get()
+                    .uri(path)
+                    .exchange()
+                    .expectStatus()
+                    .isBadRequest()
+                    .expectBody()
+                    .jsonPath("$.code")
+                    .isEqualTo("VALIDATION_FAILED");
         }
-        client.get().uri("/api/v1/dishes?afterId=bad").exchange().expectStatus().isBadRequest()
-                .expectBody().jsonPath("$.fieldErrors[0].field").isEqualTo("afterId");
-        client.post().uri("/api/v1/dishes").contentType(MediaType.APPLICATION_JSON).bodyValue("{")
-                .exchange().expectStatus().isBadRequest().expectBody().jsonPath("$.code").isEqualTo("MALFORMED_JSON");
-        client.get().uri("/api/v1/dishes/" + UUID.randomUUID()).exchange().expectStatus().isNotFound();
-        client.delete().uri("/api/v1/categories/" + UUID.randomUUID()).exchange().expectStatus().isNotFound();
-        client.get().uri("/api/v1/dishes?categoryId=" + UUID.randomUUID()).exchange().expectStatus().isNotFound();
-        client.get().uri("/api/v1/dishes").header("X-Trace-Id", "unsafe trace").exchange()
-                .expectStatus().isOk().expectHeader().value("X-Trace-Id", value -> assertThat(UUID.fromString(value)).isNotNull());
+        client.get()
+                .uri("/api/v1/dishes?afterId=bad")
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody()
+                .jsonPath("$.fieldErrors[0].field")
+                .isEqualTo("afterId");
+        client.post()
+                .uri("/api/v1/dishes")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{")
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("MALFORMED_JSON");
+        client.get()
+                .uri("/api/v1/dishes/" + UUID.randomUUID())
+                .exchange()
+                .expectStatus()
+                .isNotFound();
+        client.delete()
+                .uri("/api/v1/categories/" + UUID.randomUUID())
+                .exchange()
+                .expectStatus()
+                .isNotFound();
+        client.get()
+                .uri("/api/v1/dishes?categoryId=" + UUID.randomUUID())
+                .exchange()
+                .expectStatus()
+                .isNotFound();
+        client.get()
+                .uri("/api/v1/dishes")
+                .header("X-Trace-Id", "unsafe trace")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .value("X-Trace-Id", value -> assertThat(UUID.fromString(value)).isNotNull());
     }
-    @Test void categoryCursorFiltersBeforeLimitingAndReturnsAllDishCategories() {
-        UUID selected = category("Обеды"), other = category("Основные блюда"), empty = category("Десерты");
+
+    @Test
+    void categoryCursorFiltersBeforeLimitingAndReturnsAllDishCategories() {
+        UUID selected = category("Обеды"),
+                other = category("Основные блюда"),
+                empty = category("Десерты");
         List<String> expected = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             expected.add(dish("Обед " + i, "250.00", Set.of(selected, other)).toString());
@@ -148,15 +381,25 @@ class CatalogApiIT {
         expected.sort(Comparator.naturalOrder());
         String cursor = "";
         for (int offset = 0; offset < expected.size(); offset += 2) {
-            JsonNode page = client.get().uri("/api/v1/dishes?limit=2&categoryId=" + selected + cursor)
-                    .exchange().expectStatus().isOk().expectBody(JsonNode.class).returnResult().getResponseBody();
+            JsonNode page =
+                    client.get()
+                            .uri("/api/v1/dishes?limit=2&categoryId=" + selected + cursor)
+                            .exchange()
+                            .expectStatus()
+                            .isOk()
+                            .expectBody(JsonNode.class)
+                            .returnResult()
+                            .getResponseBody();
             List<String> actual = new ArrayList<>();
             for (JsonNode item : page.get("items")) {
                 actual.add(item.get("id").asText());
                 assertThat(item.get("categoryIds")).hasSize(2);
-                assertThat(item.get("categoryIds").toString()).contains(selected.toString(), other.toString());
+                assertThat(item.get("categoryIds").toString())
+                        .contains(selected.toString(), other.toString());
             }
-            assertThat(actual).containsExactlyElementsOf(expected.subList(offset, Math.min(offset + 2, expected.size())));
+            assertThat(actual)
+                    .containsExactlyElementsOf(
+                            expected.subList(offset, Math.min(offset + 2, expected.size())));
             boolean hasNext = offset + 2 < expected.size();
             assertThat(page.get("hasNext").asBoolean()).isEqualTo(hasNext);
             if (hasNext) {
@@ -166,73 +409,156 @@ class CatalogApiIT {
                 assertThat(page.get("nextCursor").isNull()).isTrue();
             }
         }
-        client.get().uri("/api/v1/dishes?limit=2&categoryId=" + empty).exchange().expectStatus().isOk()
-                .expectBody().jsonPath("$.items").isEmpty().jsonPath("$.hasNext").isEqualTo(false);
+        client.get()
+                .uri("/api/v1/dishes?limit=2&categoryId=" + empty)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.items")
+                .isEmpty()
+                .jsonPath("$.hasNext")
+                .isEqualTo(false);
         UUID edited = UUID.fromString(expected.getFirst());
-        client.put().uri("/api/v1/dishes/" + edited).bodyValue(payload("Без категорий", "250.00", Set.of()))
-                .exchange().expectStatus().isOk().expectBody().jsonPath("$.categoryIds").isEmpty();
-        client.get().uri("/api/v1/dishes?categoryId=" + selected).exchange().expectStatus().isOk()
-                .expectBody().jsonPath("$.items.length()").isEqualTo(4)
-                .jsonPath("$.items[*].id").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(edited.toString())));
+        client.put()
+                .uri("/api/v1/dishes/" + edited)
+                .bodyValue(payload("Без категорий", "250.00", Set.of()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.categoryIds")
+                .isEmpty();
+        client.get()
+                .uri("/api/v1/dishes?categoryId=" + selected)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.items.length()")
+                .isEqualTo(4)
+                .jsonPath("$.items[*].id")
+                .value(Matchers.not(Matchers.hasItem(edited.toString())));
     }
-    @Test void batchSnapshotsAreCompleteAndRejectMissingOrInactiveDishes() {
+
+    @Test
+    void batchSnapshotsAreCompleteAndRejectMissingOrInactiveDishes() {
         UUID first = dish("Борщ", "180.00", Set.of()), second = dish("Суп", "100.00", Set.of());
-        client.post().uri("/internal/v1/dishes/snapshots").bodyValue(Map.of("ids", List.of(first, second)))
-                .exchange().expectStatus().isOk().expectBody().jsonPath("$.length()").isEqualTo(2)
-                .jsonPath("$[0].active").isEqualTo(true);
-        client.post().uri("/internal/v1/dishes/snapshots").bodyValue(Map.of("ids", List.of()))
-                .exchange().expectStatus().isOk().expectBody().json("[]");
-        client.post().uri("/internal/v1/dishes/snapshots").bodyValue(Map.of("ids", List.of(first, UUID.randomUUID())))
-                .exchange().expectStatus().isNotFound().expectBody().jsonPath("$.code").isEqualTo("RESOURCE_NOT_FOUND");
+        client.post()
+                .uri("/internal/v1/dishes/snapshots")
+                .bodyValue(Map.of("ids", List.of(first, second)))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.length()")
+                .isEqualTo(2)
+                .jsonPath("$[0].active")
+                .isEqualTo(true);
+        client.post()
+                .uri("/internal/v1/dishes/snapshots")
+                .bodyValue(Map.of("ids", List.of()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .json("[]");
+        client.post()
+                .uri("/internal/v1/dishes/snapshots")
+                .bodyValue(Map.of("ids", List.of(first, UUID.randomUUID())))
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("RESOURCE_NOT_FOUND");
         client.delete().uri("/api/v1/dishes/" + second).exchange().expectStatus().isNoContent();
-        client.post().uri("/internal/v1/dishes/snapshots").bodyValue(Map.of("ids", List.of(first, second)))
-                .exchange().expectStatus().isEqualTo(422).expectBody().jsonPath("$.code").isEqualTo("DISH_INACTIVE");
+        client.post()
+                .uri("/internal/v1/dishes/snapshots")
+                .bodyValue(Map.of("ids", List.of(first, second)))
+                .exchange()
+                .expectStatus()
+                .isEqualTo(422)
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("DISH_INACTIVE");
     }
-    @Test void databaseConstraintsAndOptimisticLockingSurviveR2dbcMigration() {
+
+    @Test
+    void databaseConstraintsAndOptimisticLockingSurviveR2dbcMigration() {
         UUID id = dish("Борщ", "180.00", Set.of());
         Dish first = dishes.findById(id).map(DishRow::toDomain).block();
         Dish stale = dishes.findById(id).map(DishRow::toDomain).block();
         first.update("Щи", "", new BigDecimal("190.00"), Set.of());
         StepVerifier.create(dishes.save(DishRow.from(first))).expectNextCount(1).verifyComplete();
         stale.deactivate();
-        StepVerifier.create(dishes.save(DishRow.from(stale))).expectError(org.springframework.dao.OptimisticLockingFailureException.class).verify();
-        StepVerifier.create(template.getDatabaseClient().sql("UPDATE dish SET current_price = -1 WHERE id = :id")
-                .bind("id", id).fetch().rowsUpdated()).expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
-        StepVerifier.create(template.getDatabaseClient().sql("INSERT INTO dish_category VALUES (:dish, :category)")
-                .bind("dish", id).bind("category", UUID.randomUUID()).fetch().rowsUpdated())
-                .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
+        StepVerifier.create(dishes.save(DishRow.from(stale)))
+                .expectError(OptimisticLockingFailureException.class)
+                .verify();
+        StepVerifier.create(
+                        template.getDatabaseClient()
+                                .sql("UPDATE dish SET current_price = -1 WHERE id = :id")
+                                .bind("id", id)
+                                .fetch()
+                                .rowsUpdated())
+                .expectError(DataIntegrityViolationException.class)
+                .verify();
+        StepVerifier.create(
+                        template.getDatabaseClient()
+                                .sql("INSERT INTO dish_category VALUES (:dish, :category)")
+                                .bind("dish", id)
+                                .bind("category", UUID.randomUUID())
+                                .fetch()
+                                .rowsUpdated())
+                .expectError(DataIntegrityViolationException.class)
+                .verify();
     }
-    @Test void assignedCategoryUuidSupportsExplicitInsertAndSubsequentSave() {
+
+    @Test
+    void assignedCategoryUuidSupportsExplicitInsertAndSubsequentSave() {
         CategoryRow category = CategoryRow.from(new Category("Супы"));
         UUID assignedId = category.id();
-        StepVerifier.create(categories.insert(category))
-                .assertNext(saved -> assertThat(saved.id()).isEqualTo(assignedId)).verifyComplete();
+        StepVerifier.create(template.insert(category))
+                .assertNext(saved -> assertThat(saved.id()).isEqualTo(assignedId))
+                .verifyComplete();
 
         Category loaded = categories.findById(assignedId).map(CategoryRow::toDomain).block();
         loaded.update("Горячие супы");
         StepVerifier.create(categories.save(CategoryRow.from(loaded)))
-                .assertNext(saved -> assertThat(saved.id()).isEqualTo(assignedId)).verifyComplete();
+                .assertNext(saved -> assertThat(saved.id()).isEqualTo(assignedId))
+                .verifyComplete();
         StepVerifier.create(categories.findById(assignedId))
-                .assertNext(saved -> assertThat(saved.name()).isEqualTo("Горячие супы")).verifyComplete();
+                .assertNext(saved -> assertThat(saved.name()).isEqualTo("Горячие супы"))
+                .verifyComplete();
         StepVerifier.create(categories.count()).expectNext(1L).verifyComplete();
         // An explicit insert never silently overwrites an existing category.
-        StepVerifier.create(categories.insert(category))
-                .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
+        StepVerifier.create(template.insert(category))
+                .expectError(DataIntegrityViolationException.class)
+                .verify();
         StepVerifier.create(categories.findAllById(Set.of(assignedId)))
-                .assertNext(saved -> assertThat(saved.name()).isEqualTo("Горячие супы")).verifyComplete();
+                .assertNext(saved -> assertThat(saved.name()).isEqualTo("Горячие супы"))
+                .verifyComplete();
         StepVerifier.create(categories.delete(CategoryRow.from(loaded))).verifyComplete();
         StepVerifier.create(categories.findById(assignedId)).verifyComplete();
     }
 
-    @Test void categoryPagesDoNotSkipTheLookaheadRow() {
+    @Test
+    void categoryPagesDoNotSkipTheLookaheadRow() {
         List<String> expected = new ArrayList<>();
         for (int i = 0; i < 5; i++) expected.add(category("Категория " + i).toString());
         // PostgreSQL UUID order corresponds to lexical order of the canonical UUID strings.
         expected.sort(Comparator.naturalOrder());
         List<String> received = new ArrayList<>();
         for (int page = 0; page < 3; page++) {
-            JsonNode result = client.get().uri("/api/v1/categories?page=" + page + "&size=2")
-                    .exchange().expectStatus().isOk().expectBody(JsonNode.class).returnResult().getResponseBody();
+            JsonNode result =
+                    client.get()
+                            .uri("/api/v1/categories?page=" + page + "&size=2")
+                            .exchange()
+                            .expectStatus()
+                            .isOk()
+                            .expectBody(JsonNode.class)
+                            .returnResult()
+                            .getResponseBody();
             assertThat(result.get("page").asInt()).isEqualTo(page);
             assertThat(result.get("size").asInt()).isEqualTo(2);
             assertThat(result.get("hasNext").asBoolean()).isEqualTo(page < 2);
@@ -241,26 +567,59 @@ class CatalogApiIT {
         assertThat(received).containsExactlyElementsOf(expected);
     }
 
-    @Test void failedRelationInsertRollsBackDishAndPreviousRelations() {
+    @Test
+    void failedRelationInsertRollsBackDishAndPreviousRelations() {
         UUID soups = category("Супы"), mains = category("Обеды");
         UUID id = dish("Борщ", "180.00", Set.of(soups));
-        template.getDatabaseClient().sql("ALTER TABLE dish_category ADD CONSTRAINT ck_test_failure CHECK (false) NOT VALID").fetch().rowsUpdated().block();
+        template.getDatabaseClient()
+                .sql(
+                        "ALTER TABLE dish_category ADD CONSTRAINT ck_test_failure CHECK (false) NOT VALID")
+                .fetch()
+                .rowsUpdated()
+                .block();
         try {
-            client.put().uri("/api/v1/dishes/" + id).bodyValue(payload("Изменено", "250.00", Set.of(mains)))
-                    .exchange().expectStatus().isEqualTo(409);
+            client.put()
+                    .uri("/api/v1/dishes/" + id)
+                    .bodyValue(payload("Изменено", "250.00", Set.of(mains)))
+                    .exchange()
+                    .expectStatus()
+                    .isEqualTo(409);
         } finally {
-            template.getDatabaseClient().sql("ALTER TABLE dish_category DROP CONSTRAINT ck_test_failure").fetch().rowsUpdated().block();
+            template.getDatabaseClient()
+                    .sql("ALTER TABLE dish_category DROP CONSTRAINT ck_test_failure")
+                    .fetch()
+                    .rowsUpdated()
+                    .block();
         }
-        client.get().uri("/api/v1/dishes/" + id).exchange().expectStatus().isOk().expectBody()
-                .jsonPath("$.name").isEqualTo("Борщ").jsonPath("$.version").isEqualTo(0)
-                .jsonPath("$.categoryIds[0]").isEqualTo(soups.toString());
+        client.get()
+                .uri("/api/v1/dishes/" + id)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.name")
+                .isEqualTo("Борщ")
+                .jsonPath("$.version")
+                .isEqualTo(0)
+                .jsonPath("$.categoryIds[0]")
+                .isEqualTo(soups.toString());
     }
-    @Test void healthAndOpenApiDescribeOnlyPublicCatalog() {
+
+    @Test
+    void healthAndOpenApiDescribeOnlyPublicCatalog() {
         client.get().uri("/actuator/health/readiness").exchange().expectStatus().isOk();
-        JsonNode document = client.get().uri("/v3/api-docs").exchange().expectStatus().isOk()
-                .expectBody(JsonNode.class).returnResult().getResponseBody();
+        JsonNode document =
+                client.get()
+                        .uri("/v3/api-docs")
+                        .exchange()
+                        .expectStatus()
+                        .isOk()
+                        .expectBody(JsonNode.class)
+                        .returnResult()
+                        .getResponseBody();
         assertThat(document.get("paths").toString()).doesNotContain("/internal/");
-        assertThat(document.at("/paths/~1api~1v1~1dishes/post/responses/201/description").asText()).isEqualTo("Блюдо создано");
+        assertThat(document.at("/paths/~1api~1v1~1dishes/post/responses/201/description").asText())
+                .isEqualTo("Блюдо создано");
         client.get().uri("/swagger-ui/index.html").exchange().expectStatus().isOk();
     }
 }

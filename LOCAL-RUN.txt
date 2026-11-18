@@ -4,8 +4,9 @@
 Ветка: feature/lab4, от принятой lab3 через main.
 Проект Docker: high-load-lab4; API/Swagger: http://localhost:18084/swagger-ui/index.html
 Локальные секреты: .env (Git ignored). Доступы: CREDENTIALS.local.md (Git ignored).
-Config: /Users/rublev/DEV/high_load_configs_lab4, ветка lab4; Git backend.
-compose.override.yaml включает read-only local Git copy, исходный repo не меняется.
+Config Server читает https://github.com/Vediusse/high_load_configs.git, ветка lab4.
+Локальная Git-копия /Users/rublev/DEV/high_load_configs_lab4 сохранена как резерв;
+локальный compose.override.yaml отключён после успешной проверки GitHub.
 
 Запуск готовых образов:
   cd /Users/rublev/DEV/high_load_lab4

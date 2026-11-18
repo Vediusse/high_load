@@ -3,7 +3,12 @@ package ru.itmo.highload.catering.kitchen.adapters.out.feign;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import ru.itmo.highload.catering.kitchen.application.dto.in.KitchenCommand;
 import ru.itmo.highload.catering.kitchen.application.dto.in.OrderStatesRequest;
 import ru.itmo.highload.catering.kitchen.application.dto.out.OrderResponse;
@@ -15,16 +20,26 @@ public interface OrderClient {
     @PostMapping("/internal/v1/orders/states")
     List<OrderState> states(
             @RequestBody OrderStatesRequest request,
-            @RequestHeader("Authorization") String bearer, @RequestHeader("X-Trace-Id") String trace);
+            @RequestHeader("Authorization") String bearer,
+            @RequestHeader("X-Trace-Id") String trace);
 
     @GetMapping("/internal/v1/orders/{id}")
-    OrderResponse get(@PathVariable UUID id, @RequestHeader("Authorization") String bearer, @RequestHeader("X-Trace-Id") String trace);
+    OrderResponse get(
+            @PathVariable UUID id,
+            @RequestHeader("Authorization") String bearer,
+            @RequestHeader("X-Trace-Id") String trace);
 
     @GetMapping("/internal/v1/orders/kitchen")
-    PageResponse<OrderResponse> queue(@RequestParam int page, @RequestParam int size,
-                                     @RequestHeader("Authorization") String bearer, @RequestHeader("X-Trace-Id") String trace);
+    PageResponse<OrderResponse> queue(
+            @RequestParam int page,
+            @RequestParam int size,
+            @RequestHeader("Authorization") String bearer,
+            @RequestHeader("X-Trace-Id") String trace);
 
     @PostMapping("/internal/v1/orders/{id}/kitchen-commands")
-    OrderResponse command(@PathVariable UUID id, @RequestBody KitchenCommand command,
-                          @RequestHeader("Authorization") String bearer, @RequestHeader("X-Trace-Id") String trace);
+    OrderResponse command(
+            @PathVariable UUID id,
+            @RequestBody KitchenCommand command,
+            @RequestHeader("Authorization") String bearer,
+            @RequestHeader("X-Trace-Id") String trace);
 }

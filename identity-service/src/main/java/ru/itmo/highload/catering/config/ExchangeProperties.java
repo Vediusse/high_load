@@ -8,10 +8,16 @@ public record ExchangeProperties(String privateKeyBase64, String gatewaySecret) 
     public ExchangeProperties {
         try {
             if (Base64.getDecoder().decode(gatewaySecret == null ? "" : gatewaySecret).length < 32
-                    || privateKeyBase64 == null || privateKeyBase64.isBlank()) throw new IllegalArgumentException();
+                    || privateKeyBase64 == null
+                    || privateKeyBase64.isBlank()) throw new IllegalArgumentException();
         } catch (IllegalArgumentException invalid) {
-            throw new IllegalArgumentException("Configure the exchange signing key and a random Gateway credential");
+            throw new IllegalArgumentException(
+                    "Configure the exchange signing key and a random Gateway credential");
         }
     }
-    @Override public String toString() { return "ExchangeProperties[redacted]"; }
+
+    @Override
+    public String toString() {
+        return "ExchangeProperties[redacted]";
+    }
 }

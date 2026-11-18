@@ -66,3 +66,51 @@ application.yml плюс <service>/application.yml; секреты приход�
 Gateway — единственный опубликованный HTTP-порт. Внутренние пути не маршрутизируются
 наружу. Swagger открыт, бизнес API защищён ролями, пользователем и организацией.
 Точные операции, env, команды и ограничения: README.md и docs/lab4-run.md.
+
+
+Проверка архитектуры и читаемости 2026-11-18
+
+Clean Architecture определяется зависимостями, а не количеством каталогов.
+Domain содержит инварианты CorporateOrder/Dish/Organization, policy файлов и
+модели событий. Application координирует сценарии и вызывает свои порты.
+HTTP/JWT/multipart и Kafka listener находятся в adapters/in. Spring Data,
+JDBC, Feign, подпись JWT и filesystem — adapters/out. Configuration собирает
+реализации и границы транзакций. Подпись токенов Identity доступна REST через
+InternalTokens; прямой импорт реализации REST-адаптером удалён.
+
+ArchUnit проверяет все шесть бизнес-сервисов: domain не зависит от framework,
+ORM, JSON, application, adapters и файлового API; application не зависит от
+Spring, ORM, JDBC, Kafka/Feign, JSON/Swagger и внешних adapters; inbound не импортирует outbound.
+В Catalog application используются Mono/Flux для принятого реактивного стека;
+Jakarta constraints на application input DTO описывают ограничения входа.
+Это практическое разделение слоёв; полная независимость application от любых
+библиотек не заявляется. Gateway, Config, Discovery являются техническими
+сервисами, поэтому фиктивные domain/use-case пакеты в них не добавляются.
+
+Составные входы оформлены как application DTO/commands/query: CreateOrderRequest,
+UploadFileCommand, OrderSearch. Простые id/version параметры сами по себе не
+нарушают разделение. HttpRequest, Jwt, FilePart не проходят в application.
+SQL/HQL остаётся в persistence adapters. Простые выборки кухни заменены derived
+query methods, создание категории — R2dbcEntityTemplate. Оставшиеся запросы
+нужны для составных фильтров, cursor pagination, связей и атомарного upsert.
+SQL для outbox/inbox и защиты порядка не заменяется неатомарным read-then-write.
+
+Пустые старые каталоги удалены; единый формат поддерживают Spotless и .editorconfig.
+Простые assignment-only конструкторы заменены @RequiredArgsConstructor; обычные
+аксессоры используют @Getter. Конструкторы с проверками и инициализацией,
+а также методы, защищающие инварианты/коллекции, остаются явными.
+
+Готовность к production
+
+Это проверенный учебный стенд. Лабораторная не включает TLS/ACL Kafka,
+централизованный secret manager, off-host backup/restore, дежурство и нагрузочные
+SLO. Три combined KRaft broker/controller и файловый Docker volume достаточны для
+проверки задания, но не являются планом эксплуатации кластера в production.
+Репликация не заменяет резервное копирование; DLT требует операционного разбора.
+
+Источники принципов:
+https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html
+https://docs.spring.io/spring-data/jpa/reference/3.5/jpa/query-methods.html
+
+Правила JSON для nullable снимков OrderLineResponse заданы в wiring через
+Jackson customizer; выходные application DTO не импортируют Jackson.

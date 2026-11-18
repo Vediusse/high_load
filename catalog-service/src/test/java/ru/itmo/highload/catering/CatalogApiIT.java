@@ -15,10 +15,12 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import reactor.test.StepVerifier;
-import ru.itmo.highload.catering.catalog.entity.Dish;
-import ru.itmo.highload.catering.catalog.entity.Category;
-import ru.itmo.highload.catering.catalog.repository.CategoryRepository;
-import ru.itmo.highload.catering.catalog.repository.DishRepository;
+import ru.itmo.highload.catering.catalog.domain.model.Dish;
+import ru.itmo.highload.catering.catalog.domain.model.Category;
+import ru.itmo.highload.catering.catalog.adapters.out.persistence.CategoryRepository;
+import ru.itmo.highload.catering.catalog.adapters.out.persistence.DishRepository;
+import ru.itmo.highload.catering.catalog.adapters.out.persistence.CategoryRow;
+import ru.itmo.highload.catering.catalog.adapters.out.persistence.DishRow;
 import static org.assertj.core.api.Assertions.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -188,12 +190,12 @@ class CatalogApiIT {
     }
     @Test void databaseConstraintsAndOptimisticLockingSurviveR2dbcMigration() {
         UUID id = dish("Борщ", "180.00", Set.of());
-        Dish first = dishes.findById(id).block();
-        Dish stale = dishes.findById(id).block();
+        Dish first = dishes.findById(id).map(DishRow::toDomain).block();
+        Dish stale = dishes.findById(id).map(DishRow::toDomain).block();
         first.update("Щи", "", new BigDecimal("190.00"), Set.of());
-        StepVerifier.create(dishes.save(first)).expectNextCount(1).verifyComplete();
+        StepVerifier.create(dishes.save(DishRow.from(first))).expectNextCount(1).verifyComplete();
         stale.deactivate();
-        StepVerifier.create(dishes.save(stale)).expectError(org.springframework.dao.OptimisticLockingFailureException.class).verify();
+        StepVerifier.create(dishes.save(DishRow.from(stale))).expectError(org.springframework.dao.OptimisticLockingFailureException.class).verify();
         StepVerifier.create(template.getDatabaseClient().sql("UPDATE dish SET current_price = -1 WHERE id = :id")
                 .bind("id", id).fetch().rowsUpdated()).expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
         StepVerifier.create(template.getDatabaseClient().sql("INSERT INTO dish_category VALUES (:dish, :category)")
@@ -201,24 +203,24 @@ class CatalogApiIT {
                 .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
     }
     @Test void assignedCategoryUuidSupportsExplicitInsertAndSubsequentSave() {
-        Category category = new Category("Супы");
-        UUID assignedId = category.getId();
+        CategoryRow category = CategoryRow.from(new Category("Супы"));
+        UUID assignedId = category.id();
         StepVerifier.create(categories.insert(category))
-                .assertNext(saved -> assertThat(saved.getId()).isEqualTo(assignedId)).verifyComplete();
+                .assertNext(saved -> assertThat(saved.id()).isEqualTo(assignedId)).verifyComplete();
 
-        Category loaded = categories.findById(assignedId).block();
+        Category loaded = categories.findById(assignedId).map(CategoryRow::toDomain).block();
         loaded.update("Горячие супы");
-        StepVerifier.create(categories.save(loaded))
-                .assertNext(saved -> assertThat(saved.getId()).isEqualTo(assignedId)).verifyComplete();
+        StepVerifier.create(categories.save(CategoryRow.from(loaded)))
+                .assertNext(saved -> assertThat(saved.id()).isEqualTo(assignedId)).verifyComplete();
         StepVerifier.create(categories.findById(assignedId))
-                .assertNext(saved -> assertThat(saved.getName()).isEqualTo("Горячие супы")).verifyComplete();
+                .assertNext(saved -> assertThat(saved.name()).isEqualTo("Горячие супы")).verifyComplete();
         StepVerifier.create(categories.count()).expectNext(1L).verifyComplete();
         // An explicit insert never silently overwrites an existing category.
         StepVerifier.create(categories.insert(category))
                 .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
         StepVerifier.create(categories.findAllById(Set.of(assignedId)))
-                .assertNext(saved -> assertThat(saved.getName()).isEqualTo("Горячие супы")).verifyComplete();
-        StepVerifier.create(categories.delete(loaded)).verifyComplete();
+                .assertNext(saved -> assertThat(saved.name()).isEqualTo("Горячие супы")).verifyComplete();
+        StepVerifier.create(categories.delete(CategoryRow.from(loaded))).verifyComplete();
         StepVerifier.create(categories.findById(assignedId)).verifyComplete();
     }
 

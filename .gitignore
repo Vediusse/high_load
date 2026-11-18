@@ -11,6 +11,8 @@ build/
 out/
 # Java response DTO packages are source code, not IDE build output.
 !**/src/**/dto/out/
+# Outbound adapters are Java source, not IDE build output.
+!**/src/**/adapters/out/
 *.class
 
 # Env

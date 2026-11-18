@@ -10,12 +10,12 @@ import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import ru.itmo.highload.catering.kitchen.client.dto.in.KitchenCommand;
-import ru.itmo.highload.catering.kitchen.client.dto.in.OrderStatesRequest;
-import ru.itmo.highload.catering.kitchen.client.dto.out.OrderLineResponse;
-import ru.itmo.highload.catering.kitchen.client.dto.out.OrderResponse;
-import ru.itmo.highload.catering.kitchen.client.dto.out.OrderState;
-import ru.itmo.highload.catering.kitchen.client.dto.out.OrderStatus;
+import ru.itmo.highload.catering.kitchen.application.dto.in.KitchenCommand;
+import ru.itmo.highload.catering.kitchen.application.dto.in.OrderStatesRequest;
+import ru.itmo.highload.catering.kitchen.application.dto.out.OrderLineResponse;
+import ru.itmo.highload.catering.kitchen.application.dto.out.OrderResponse;
+import ru.itmo.highload.catering.kitchen.application.dto.out.OrderState;
+import ru.itmo.highload.catering.kitchen.domain.model.OrderStatus;
 import ru.itmo.highload.common.dto.out.PageResponse;
 
 // Real HTTP partner for failure injection. Compose checks use the actual Order application.

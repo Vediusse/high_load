@@ -17,9 +17,9 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
-import ru.itmo.highload.catering.kitchen.client.dto.out.OrderResponse;
-import ru.itmo.highload.catering.kitchen.client.dto.out.OrderStatus;
-import ru.itmo.highload.catering.kitchen.service.TaskProjection;
+import ru.itmo.highload.catering.kitchen.application.dto.out.OrderResponse;
+import ru.itmo.highload.catering.kitchen.domain.model.OrderStatus;
+import ru.itmo.highload.catering.kitchen.application.TaskProjection;
 
 @SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT, useMainMethod=SpringBootTest.UseMainMethod.ALWAYS)
 @org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient

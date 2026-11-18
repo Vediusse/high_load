@@ -1,0 +1,18 @@
+# Optional local Git backend. The host repository remains read-only.
+services:
+  config-service:
+    environment:
+      CONFIG_REPO_URI: file:/tmp/high-load-local-config
+    volumes:
+      - type: bind
+        source: ${LOCAL_CONFIG_PATH:?Set LOCAL_CONFIG_PATH to an absolute Git repository path}
+        target: /config-source
+        read_only: true
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        rm -rf /tmp/high-load-local-config &&
+        cp -R /config-source /tmp/high-load-local-config &&
+        printf '[core]\nrepositoryformatversion = 0\nbare = false\n' > /tmp/high-load-local-config/.git/config &&
+        exec java -jar /app/app.jar

@@ -26,3 +26,7 @@ AI/
 
 # Локальные резервные копии БД
 backups/
+
+# Private local launch and credentials
+/compose.override.yaml
+/CREDENTIALS.local.md

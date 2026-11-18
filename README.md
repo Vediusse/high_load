@@ -1,160 +1,107 @@
-# Проект по курсу «Высокопроизводительные системы»
+# Корпоративное питание — лабораторная 4
 
-Актуальные документы:
+Собственная кухня, постоянное меню, заказы организаций и ручное подтверждение заказа целиком. Сохранены функции и безопасность лабораторий 1–3; добавлены Kafka, внутренние уведомления, файлы и Clean Architecture.
 
-- [Артефакты для преподавателя](./Артефакты/README.md)
-- [Инкрементальная планировка](./Планировка/README.md)
+## Запуск
 
-Файл [business-domain-options.md](./business-domain-options.md) сохранён как история первоначального выбора. Актуальная модель — сервис корпоративного питания для собственной кухни с постоянным меню и ручным подтверждением заказа.
-
-Исходное ТЗ прочитано из `/Users/rublevvalerii/high_load.md`.
-
-## Текущая версия
-
-Лабораторная 1 содержит рабочие справочники и полный жизненный цикл корпоративного заказа:
-
-- CRUD и логическая деактивация организаций и точек выдачи;
-- CRUD категорий с запретом удаления используемой категории;
-- CRUD и логическая деактивация блюд, связь блюда с несколькими категориями;
-- активное постоянное меню с cursor pagination без общего количества;
-- page pagination остальных списков с пределом 50;
-- единый JSON-контракт ошибок с `code`, `message`, `fieldErrors` и `traceId`;
-- создание и изменение заказа в `DRAFT`, атомарная полная замена его позиций;
-- проверка активной организации, принадлежности и активности точки выдачи, активных блюд, количества и отсутствия дублей;
-- отправка отдельной командой `submit` с повторным чтением цен, снимками названия/цены, итогом и записью истории `DRAFT → SUBMITTED`;
-- optimistic locking через обязательный `expectedVersion` и `409 ORDER_VERSION_CONFLICT`;
-- отдельные команды подтверждения и отклонения всего заказа; причина отклонения обязательна;
-- отмена с обязательной причиной из `DRAFT`, `SUBMITTED` и `CONFIRMED`, но не после начала приготовления;
-- последовательный процесс `CONFIRMED → IN_COOKING → READY → COMPLETED`;
-- неизменяемая история каждого перехода с пагинацией;
-- page pagination заказов по статусу и организации с `X-Total-Count`.
-
-Универсального изменения статуса нет: каждый переход выражен отдельной бизнес-командой. Автор перехода (`changedBy`) до появления аутентифицированных пользователей остаётся `null`; передавать его со слов клиента API нельзя.
-
-### Локальная проверка
-
-Требуются Java 21+ и работающий Docker daemon:
+Нужны Docker, Java 21, Python 3 и OpenSSL. Создать локальные секреты один раз:
 
 ```bash
-./mvnw clean verify
-docker compose config
-docker compose up --build
+python3 scripts/setup-env.py
+docker compose up -d --build --wait --wait-timeout 600
 ```
 
-`verify` запускает unit-тесты, интеграционные `*IT` и проверку покрытия. PostgreSQL
-для тестов поднимает Testcontainers; достаточно запущенного Docker, `docker compose up`
-для тестов не требуется. На macOS при нескольких JDK можно явно выбрать Java 21:
+`setup-env.py` создаёт `.env` с правами `600`, случайными паролями и RSA-ключами. Существующий файл он сохраняет. Настройки для самостоятельного заполнения — в [.env.example](.env.example). Bootstrap создаёт первого супервизора только на пустой базе; его логин и пароль находятся в `.env`.
+
+Демонстрационные роли, справочники и отправленный заказ можно создать через настоящий API: `python3 scripts/seed-demo.py --env-file .env`. Доступы сохранятся только в локальный `CREDENTIALS.local.md`, который игнорируется Git.
+
+При стандартном порте:
+
+- [Swagger UI](http://localhost:8080/swagger-ui/index.html) — выбор сервиса и Authorize;
+- [readiness](http://localhost:8080/actuator/health/readiness);
+- OpenAPI: `/v3/api-docs`, `/v3/api-docs/catalog`, `/v3/api-docs/kitchen`, `/v3/api-docs/identity`, `/v3/api-docs/notifications`, `/v3/api-docs/files`.
+
+`HTTP_PORT` и `COMPOSE_PROJECT_NAME` позволяют запускать лабораторные в отдельных окружениях. В текущем checkout локальный порт задан в `.env`; данные находятся в именованных Docker volumes. Остановка с сохранением данных: `docker compose stop`.
+
+Config Server использует отдельный Git-репозиторий [high_load_configs, ветка lab4](https://github.com/Vediusse/high_load_configs/tree/lab4): общие свойства в `application.yml`, отдельные — в `<service>/application.yml`. Секреты передаются через окружение. `CONFIG_REPO_URI` и `CONFIG_REPO_LABEL` задаются в `.env`. Локальная Git-копия также поддерживается; порядок настройки описан в [документации запуска](docs/lab4-run.md).
+
+## Проверка
+
+Все unit-тесты, интеграционные тесты с PostgreSQL и настоящим кластером из трёх Kafka-брокеров, ArchUnit и порог JaCoCo 70%:
 
 ```bash
-JAVA_HOME="$(/usr/libexec/java_home -v 21)" ./mvnw clean verify
+DOCKER_AUTH_CONFIG='{"auths":{}}' JAVA_HOME=$(/usr/libexec/java_home -v 21) ./mvnw clean verify
 ```
 
-После запуска доступны:
+В Linux достаточно `./mvnw clean verify`, если `JAVA_HOME` указывает на Java 21. Testcontainers поднимает собственные контейнеры; предварительный запуск Compose для Maven не нужен.
 
-- health: <http://localhost:8080/actuator/health>;
-- readiness: <http://localhost:8080/actuator/health/readiness>;
-- OpenAPI JSON: <http://localhost:8080/v3/api-docs>;
-- Swagger UI: <http://localhost:8080/swagger-ui/index.html>.
-
-Полный сценарий защиты на изолированной чистой БД описан в [docs/lab1-defense.md](./docs/lab1-defense.md). После запуска окружения его можно выполнить одной командой:
+Проверки запущенного окружения:
 
 ```bash
-./scripts/lab1-defense.sh
+python3 scripts/lab4-notifications-smoke.py --env-file .env
+python3 scripts/lab4-files-smoke.py --env-file .env
+python3 scripts/lab4-outbox-smoke.py --env-file .env --failure-tests
 ```
 
-REST API использует префикс `/api/v1`:
+Для другого порта передать `--base-url http://localhost:PORT`. Сценарии создают демонстрационные данные. Последняя команда временно останавливает Kafka и Notification и проверяет восстановление. Подробные команды защиты и повторной доставки — в [docs/lab4-run.md](docs/lab4-run.md).
 
-- `/organizations` и `/organizations/{id}/delivery-points`;
-- `/delivery-points/{id}`;
-- `/categories`;
-- `/dishes?afterId=&limit=&categoryId=`;
-- `/orders?page=&size=&status=&organizationId=`;
-- `/orders/{id}/details`, `/orders/{id}/lines` и `/orders/{id}/submit`;
-- `/orders/{id}/confirm`, `/orders/{id}/reject`, `/orders/{id}/cancel`;
-- `/orders/{id}/start-cooking`, `/orders/{id}/mark-ready`, `/orders/{id}/complete`;
-- `/orders/{id}/history?page=&size=`.
+## Сервисы и данные
 
-Телефоны принимаются в нормализованном E.164, например `+79991234567`. Время заказа передаётся как ISO 8601 с обязательным offset. Размер `size`/`limit` — от 1 до 50. `GET /dishes` возвращает `items`, `nextCursor`, `hasNext` и не выполняет total count; списки организаций и заказов передают total в `X-Total-Count`. Каждая команда изменения существующего заказа принимает актуальный `expectedVersion` из предыдущего ответа.
+| Сервис | Ответственность |
+| --- | --- |
+| Catalog | Категории, блюда, активное меню и текущие цены; PostgreSQL/R2DBC |
+| Order | Организации, точки, заказ, снимки цен, история, квитанции команд, ссылки на файлы; PostgreSQL/JPA |
+| Kitchen | Синхронные команды приготовления и локальная проекция; PostgreSQL/JPA |
+| Identity | Пользователи, роли, BCrypt, вход, проверка текущего состояния пользователя, внутренний JWT; PostgreSQL/JPA |
+| Notification | Внутренняя лента и обработанные события; отдельная PostgreSQL |
+| File | Метаданные, доступ, checksum и логическое удаление; отдельная PostgreSQL и binary volume |
+| Gateway | Единственный опубликованный HTTP-вход и обмен JWT |
+| Discovery / Config | Eureka и конфигурация из Git |
 
-Остановить окружение без удаления данных:
+Всего: девять приложений, шесть PostgreSQL и три Kafka-брокера; `common` — библиотека, а `kafka-init` — завершающаяся настройка топиков.
 
-```bash
-docker compose down
+```mermaid
+flowchart LR
+  Client --> Gateway
+  Gateway --> Identity
+  Gateway --> Catalog
+  Gateway --> Order[Order + outbox]
+  Gateway --> Kitchen[Kitchen + outbox]
+  Gateway --> Notification
+  Gateway --> File[File + outbox + volume]
+  Identity --> Order
+  Kitchen --> Order
+  Order --> Catalog
+  File --> Order
+  Order --> Kafka
+  Kitchen --> Kafka
+  File --> Kafka
+  Kafka --> Notification
+  Kafka --> Kitchen
+  Kafka --> Order
+  Notification --> Identity
 ```
 
-### Реактивные ответы и сущности
+## Надёжность и безопасность
 
-Контроллеры возвращают `Mono<T>` для одного результата, `Flux<T>` для выдачи нескольких
-объектов и `Mono<Void>` для операций без тела ответа. Страница с `items`, `hasNext`
-и параметрами пагинации — один объект, поэтому возвращается как `Mono<PageResponse<T>>`
-(для меню — `Mono<DishCursorPageResponse>`). Коллекции внутри DTO остаются обычными
-коллекциями. Сбор элементов выполняется на границе формирования страницы, агрегата
-или проверки всего ограниченного пакета. Снимки блюд проверяются целиком до выдачи
-первого элемента, чтобы ошибка не превращалась в частичный успешный ответ.
+Каждый новый защищённый внешний запрос допускается через Gateway → Identity. Внутри цепочки используется короткий RS256 JWT, который сервисы проверяют локально. Роли и организация ограничивают доступ к объектам; супервизор управляет пользователями и не получает автоматически бизнес-права. Swagger открыт, его бизнес-запросы требуют Bearer token.
 
-Статусы создания/удаления задаются через `@ResponseStatus`; `Location`, `X-Total-Count`
-и динамические статусы ошибок — через HTTP response. JSON-контракты сохранены.
-JPA/Feign в заказах и кухне выполняются через `BlockingRequests` на отдельном scheduler.
+Изменение состояния, история и outbox создаются в одной локальной транзакции владельца. Relay отмечает событие отправленным только после Kafka ack. Повторы сохраняются и доставляются снова; consumer записывает `eventId` вместе с эффектом. Для неверных сообщений предусмотрены ограниченные повторы и реплицируемый DLT. Синхронные команды и проверка прав остаются синхронными.
 
-Для entity используются Lombok `@Getter` и защищённый `@NoArgsConstructor`.
-Доменные конструкторы, проверки и методы изменения состояния сохранены; геттеры
-коллекций по-прежнему возвращают неизменяемое представление.
+Топики `order-events`, `production-events`, `file-events` имеют по три partition, replication factor 3 и `min.insync.replicas=2`. Ключ — `orderId`. Содержимое событий — идентификаторы и необходимые версии; JWT, пароли и контакты не сохраняются.
 
-`CategoryRepository` и `DishRepository` — два интерфейса `ReactiveCrudRepository`.
-Стандартный CRUD реализует Spring Data, специальные SQL-запросы объявлены прямо
-в интерфейсах через `@Query`, как в репозиториях заказов и кухни. Отдельных
-custom-фрагментов, классов-обёрток и `R2dbcEntityTemplate` в коде каталога нет.
+Domain не зависит от Spring, ORM, Kafka и файловой системы. Application использует порты; REST/Kafka — входные адаптеры, БД/Feign/storage — выходные. Для JPA-агрегатов ORM mapping вынесен в инфраструктурные XML. Границы проверяет ArchUnit во всех шести бизнес-сервисах.
 
-Категории создаются явным `INSERT ... RETURNING` в `CategoryRepository`: UUID уже
-назначен конструктором, а поля `@Version` нет, поэтому стандартный `save` используется
-для обновления загруженной категории. Для блюд `save` подходит и для создания:
-новая сущность определяется по `@Version == null`, обновления защищены optimistic locking.
+## Новые API
 
-Связи с категориями принадлежат блюду и сохраняются запросами `DishRepository`.
-`CatalogService` заменяет их в той же реактивной транзакции, что и сохраняет блюдо.
-Пагинация и фильтрация выполняются в БД; для `hasNext` читается `limit + 1` строк.
-Фильтр категории использует `EXISTS`, поэтому одно блюдо не дублируется из-за связей.
-Схема БД и JSON-контракты сохранены.
+- `GET /api/v1/notifications?page=&size=` — собственная лента, максимум 50;
+- `POST /api/v1/notifications/{id}/read` — идемпотентная отметка прочтения;
+- `POST /api/v1/files` — multipart `orderId`, `relationType`, `file`, ответ `201`;
+- `GET /api/v1/files/{id}` — скачивание после проверки доступа к заказу и checksum;
+- `DELETE /api/v1/files/{id}` — логическое удаление владельцем, `204`;
+- `GET /api/v1/orders/{id}/files?page=&size=` — актуальные метаданные File Service;
+- `GET /api/v1/orders/{id}/file-references?page=&size=` — событийная проекция ID/типов файлов в Order.
 
-### Circuit breaker
+`SPECIFICATION` загружается для подтверждённого, готовящегося, готового или выданного заказа. `DISCREPANCY_ACT` — для готового или выданного. По умолчанию разрешены PDF/PNG/JPEG до 10 MiB; проверяются MIME, сигнатура и SHA-256. Исходное имя не используется как путь. Логическое удаление сохраняет бинарные данные и метаданные; физическая очистка не запускается автоматически.
 
-Политика для связей заказ → каталог и кухня → заказ находится в отдельном
-[репозитории конфигурации](https://github.com/Vediusse/high_load_configs):
-`order-service/application.yml` и `kitchen-service/application.yml`.
-
-- окно последних 50 вызовов, минимум 20 учитываемых вызовов;
-- открытие при 50% ошибок либо 50% медленных вызовов (дольше 1500 мс);
-- OPEN: 30 секунд без запросов к зависимости, затем HALF_OPEN по следующему запросу;
-- HALF_OPEN: пять пробных вызовов; при доле ошибок/медленных вызовов ниже порога
-  переход в CLOSED, иначе снова OPEN; ожидание проб ограничено 15 секундами;
-- распознанные бизнес-ошибки исключены из статистики; недоступность, таймауты
-  и некорректные ответы учитываются как сбой;
-- Feign ограничивает соединение одной секундой, чтение двумя; автоматических повторов нет.
-
-30 секунд — начальная пауза до проверки доступности, а не обещание восстановления
-и не универсальное значение. Её можно изменить переменными `CATALOG_CIRCUIT_OPEN_WAIT`
-и `ORDER_CIRCUIT_OPEN_WAIT` в окружении соответствующего сервиса. Размер окна и пороги
-следует корректировать по частоте запросов, задержкам и целям доступности.
-В интеграционных тестах только пауза OPEN сокращена до одной секунды; проверяются
-отказ без сетевого вызова, успешное восстановление, повторный отказ проб, медленные
-ответы и ограниченное ожидание в HALF_OPEN.
-
-### Config Server
-
-Конфигурации хранятся отдельно от кода в [high_load_configs](https://github.com/Vediusse/high_load_configs).
-Config Server читает Git-репозиторий: `application.yml` в корне содержит общие настройки,
-`<spring.application.name>/application.yml` — настройки конкретного сервиса.
-Файлы `application-<profile>.yml` в тех же папках могут переопределять настройки профиля;
-сейчас сервисы используют профиль `default`. Это структура из
-[примера преподавателя](https://github.com/leomag/configs-repo).
-
-Адрес репозитория задаётся `CONFIG_REPO_URI`, ветка/тег — `CONFIG_REPO_LABEL` (по умолчанию `main`).
-Config Server клонирует репозиторий при старте; ошибка доступа останавливает запуск.
-Клиенты получают настройки через `spring.config.import=configserver:...` по имени сервиса.
-Например, внутри Compose `http://config-service:8888/order-service/default/main`
-возвращает общие и заказные настройки, а поле `version` — SHA коммита конфигурации.
-
-После commit/push конфигурации перезапустите нужный сервис, например
-`docker compose restart order-service`: пересборка образов не нужна.
-Автоматический refresh работающих клиентов не настроен.
-Пароли и JWT-ключи остаются в окружении сервисов, в Git хранятся только `${...}`-ссылки.
+Подробности: [архитектура](docs/architecture.txt), [проектные решения lab4](docs/lab4-design.txt), [контракт безопасности](docs/security/lab3-contract.txt), [базовый бизнес-сценарий](docs/lab1-defense.md).

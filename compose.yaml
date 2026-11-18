@@ -3,10 +3,12 @@ name: corporate-catering
 x-app: &app
   mem_limit: 512m
   stop_grace_period: 45s
+  configs:
+    - jvm-network-security
   environment: &environment
     CONFIG_SERVER_URL: http://config-service:8888
     EUREKA_URL: http://discovery-service:8761/eureka/
-    JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60
+    JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -Djava.security.properties=/jvm-network-security
   healthcheck: &health
     test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
     interval: 5s
@@ -17,7 +19,10 @@ x-kafka: &kafka
   image: apache/kafka:3.9.1
   mem_limit: 640m
   stop_grace_period: 45s
+  configs:
+    - jvm-network-security
   environment: &kafka-environment
+    JAVA_TOOL_OPTIONS: -Djava.security.properties=/jvm-network-security
     CLUSTER_ID: ${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qk}
     KAFKA_PROCESS_ROLES: broker,controller
     KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093
@@ -84,11 +89,13 @@ services:
         condition: service_healthy
   config-service:
     mem_limit: 512m
+    configs:
+      - jvm-network-security
     build:
       context: .
       dockerfile: config-service/Dockerfile
     environment:
-      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60
+      JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -Djava.security.properties=/jvm-network-security
       CONFIG_REPO_URI: ${CONFIG_REPO_URI:-https://github.com/Vediusse/high_load_configs.git}
       CONFIG_REPO_LABEL: ${CONFIG_REPO_LABEL:-lab4}
     healthcheck:
@@ -313,6 +320,9 @@ services:
         condition: service_healthy
     ports:
       - "${HTTP_PORT:-8080}:8080"
+configs:
+  jvm-network-security:
+    file: ./infra/jvm/network.security
 volumes:
   kafka-1-data:
   kafka-2-data:

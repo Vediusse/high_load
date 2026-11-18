@@ -1,0 +1,55 @@
+Проверка лабораторной 4 — 2026-11-18
+
+Основа: принятая lab3, main c9f0d1f. Ветка feature/lab4.
+Бизнес лабораторий 1–3 сохранён; новый функционал описан в lab4-design.txt.
+
+Полный чистый Maven reactor: 188 tests, 0 failures/errors/skips, BUILD SUCCESS.
+Команда: DOCKER_AUTH_CONFIG='{"auths":{}}' JAVA_HOME=$(/usr/libexec/java_home -v 21) ./mvnw -B -ntp -fae clean verify
+
+                         Tests   JaCoCo lines
+common                      29         95.41%
+config-service               3        100.00%
+discovery-service            2        100.00%
+gateway-service              8         95.40%
+catalog-service             16         98.44%
+order-service               64         92.59%
+kitchen-service             18         95.39%
+identity-service            34         96.34%
+notification-service         6         95.35%
+file-service                 8         91.62%
+
+Проверки включают реальные PostgreSQL и три Kafka Testcontainers, replay,
+полный restart Kafka, broker loss, DLT и architecture gates бизнес-сервисов.
+
+Отдельный чистый Compose: 9 приложений + 6 PostgreSQL + 3 Kafka;
+миграции всех шести БД применены с нуля. Config Server прочитал Git lab4 commit
+27e27eabe4ebfd1ec72ab62ed37a2e059910375f из отдельного high_load_configs.
+На этой машине Docker не смог обратиться к GitHub по HTTPS; использован
+поддерживаемый read-only local Git backend той же опубликованной ветки.
+Обычный remote Git остаётся основным вариантом compose.yaml.
+
+На чистом стенде с одним остановленным брокером прошли полный цикл уведомлений
+и полный цикл файлов: права, чужая организация, owner delete, MIME/signature/
+size, ранний акт, checksum и повреждение/восстановление, download, logical delete,
+сохранённые bytes, ссылки Order и уведомления.
+
+Финальный отказ всех брокеров обнаружил проблему кэшированных DNS-адресов:
+Docker поменял IP между broker ID. Событие осталось в outbox. Исправление —
+infra/jvm/network.security, дополнение стандартных security properties JDK.
+Новые соединения разрешают DNS заново, включая брокеры. Приёмочный критерий:
+автоматическое восстановление без ручного перезапуска приложений.
+
+Точные команды демонстрации и восстановления: lab4-run.md.
+Окружение, токены и локальные пароли в Git не включаются.
+
+После исправления два последовательных полного отказа Kafka прошли без ручного
+restart producer/consumer приложений. В каждом прогоне проверены сохранение
+CONFIRMED и pending outbox во время отказа, доставка после восстановления,
+идемпотентный повтор, остановка Notification, backlog и повтор после его старта.
+
+Защищённая регрессия лабораторий 1–3 прошла на чистом финальном стенде:
+JWT/exchange/roles/revocation, недоступность Identity и допущенная цепочка,
+полный старый бизнес-цикл и прежние REST DTO/параметры/ответы. Согласованное
+добавление file-references не меняет существующие операции. После догонки
+в order/kitchen/file нет pending outbox; Notification lag=0 на непустых
+партициях. Административный вывод подтверждает voters 1/2/3 и RF3 всех топиков.

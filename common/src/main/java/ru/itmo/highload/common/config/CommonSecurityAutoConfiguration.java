@@ -44,6 +44,8 @@ public class CommonSecurityAutoConfiguration {
                 .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
                 .requestCache(cache -> cache.requestCache(NoOpServerRequestCache.getInstance()))
                 .authorizeExchange(access -> access
+                        .pathMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**",
+                                "/swagger-ui.html", "/swagger-ui/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness").permitAll()
                         .pathMatchers("/actuator/info").hasRole("SUPERVISOR")
                         // L3.3 establishes authentication; the business role/tenant matrix is applied in L3.4/L3.5.

@@ -241,13 +241,11 @@ Authorization Server, брокер, Redis, Keycloak и service mesh не доб�
   GET /actuator/health/liveness;
   GET /actuator/health/readiness.
 Health отдаёт только status, без подробностей и секретов.
-Swagger/OpenAPI не анонимны: любой активный пользователь может получить
-/v3/api-docs, /v3/api-docs/catalog, /v3/api-docs/kitchen, /v3/api-docs/identity,
-/v3/api-docs/swagger-config, /swagger-ui.html и /swagger-ui/** с Bearer.
-Swagger UI открывается клиентом, который добавляет Bearer и к HTML/assets,
-а Authorize задаёт токен для бизнес-запросов; анонимная веб-страница входа
-и cookie-сессия не добавляются. Для обычной демонстрации без браузерного
-плагина используются Postman или защищённый OpenAPI через curl с Bearer.
+Уточнение 2026-10-21: анонимный allowlist также включает GET
+/v3/api-docs, /v3/api-docs/**, /swagger-ui.html и /swagger-ui/**.
+Swagger UI, его assets, swagger-config и схемы всех сервисов доступны без Bearer.
+Authorize задаёт пользовательский JWT для бизнес-запросов; бизнес-API сохраняют
+аутентификацию, ролевые и объектные ограничения. Cookie-сессия не добавляется.
 GET /actuator/info — только SUPERVISOR, минимум сведений о конфигурации.
 Другие actuator endpoints не экспонируются. Анонимное OPTIONS не добавляем:
 отдельного cross-origin frontend нет. HTTP Basic/form login выключены,

@@ -107,10 +107,11 @@ public class SecurityConfiguration {
                 .requestCache(cache -> cache.requestCache(NoOpServerRequestCache.getInstance()))
                 .authorizeExchange(access -> access
                         .pathMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**",
+                                "/swagger-ui.html", "/swagger-ui/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness").permitAll()
                         .pathMatchers("/api/v1/users", "/api/v1/users/**", "/actuator/info").hasRole("SUPERVISOR")
-                        .pathMatchers(HttpMethod.GET, "/api/v1/me",
-                                "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").authenticated()
+                        .pathMatchers(HttpMethod.GET, "/api/v1/me").authenticated()
                         // Unsupported methods on known paths reach WebFlux's standard 405 after authentication.
                         .pathMatchers("/api/v1/auth/login", "/api/v1/me").authenticated()
                         .anyExchange().denyAll())

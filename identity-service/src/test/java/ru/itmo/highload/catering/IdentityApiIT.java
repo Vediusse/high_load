@@ -646,14 +646,15 @@ class IdentityApiIT {
     }
 
     @Test
-    void healthIsAnonymousButDocsAndInfoRequireAuthentication() {
+    void healthAndDocsAreAnonymousButInfoRequiresAuthentication() {
         for (String path :
                 List.of(
                         "/actuator/health",
                         "/actuator/health/liveness",
                         "/actuator/health/readiness"))
             get(path, null).exchange().expectStatus().isOk();
-        get("/v3/api-docs", null).exchange().expectStatus().isUnauthorized();
+        get("/v3/api-docs", null).exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.openapi").exists();
         get("/v3/api-docs", admin)
                 .exchange()
                 .expectStatus()

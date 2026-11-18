@@ -56,7 +56,7 @@ admin = login(os.environ["IDENTITY_BOOTSTRAP_LOGIN"])
 me = call("GET", "/api/v1/me", token=admin)
 assert me["roles"] == ["SUPERVISOR"]
 assert "password" not in me and "passwordHash" not in me
-call("GET", "/v3/api-docs/identity", expected=401)
+call("GET", "/v3/api-docs/identity", expected=200)
 schema = call("GET", "/v3/api-docs/identity", token=admin)
 assert len([1 for item in schema["paths"].values() for method in item if method in ("get", "post", "put")]) == 7
 call("GET", "/internal/v1/organizations/" + str(uuid.uuid4()), token=admin, expected=404)

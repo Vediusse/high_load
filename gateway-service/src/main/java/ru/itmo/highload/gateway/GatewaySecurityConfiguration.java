@@ -86,6 +86,8 @@ public class GatewaySecurityConfiguration {
                 .addFilterAt(authentication, SecurityWebFiltersOrder.AUTHENTICATION)
                 .authorizeExchange(access -> access
                         .pathMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**",
+                                "/swagger-ui.html", "/swagger-ui/**").permitAll()
                         .pathMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness").permitAll()
                         .pathMatchers("/actuator/info").hasRole("SUPERVISOR")
                         .anyExchange().authenticated())

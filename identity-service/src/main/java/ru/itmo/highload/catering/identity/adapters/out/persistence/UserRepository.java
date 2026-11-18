@@ -11,4 +11,6 @@ public interface UserRepository extends JpaRepository<AppUser, UUID> {
     Optional<AppUser> findByLogin(String login);
 
     Slice<AppUser> findBy(Pageable page);
+    @org.springframework.data.jpa.repository.Query("select u.id from AppUser u join u.roles r where u.status=ru.itmo.highload.catering.identity.domain.model.UserStatus.ACTIVE and r.code=:role and (:organizationId is null or u.organizationId=:organizationId) order by u.id")
+    Slice<UUID> recipients(ru.itmo.highload.catering.identity.domain.model.RoleCode role, UUID organizationId, Pageable page);
 }

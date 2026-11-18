@@ -69,3 +69,8 @@ catering:
 spring:
   jpa:
     mapping-resources: META-INF/identity-domain.hbm.xml
+
+---
+identity:
+  notifications:
+    secret: test-notification-service-credential-42

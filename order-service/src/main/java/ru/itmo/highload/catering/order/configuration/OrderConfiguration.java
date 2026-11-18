@@ -12,11 +12,14 @@ import ru.itmo.highload.catering.organization.application.ports.*;
 import ru.itmo.highload.catering.catalog.application.ports.DishCatalog;
 @Configuration
 public class OrderConfiguration {
+    @Bean ru.itmo.highload.common.events.JdbcOutbox eventOutbox(org.springframework.jdbc.core.JdbcTemplate jdbc,com.fasterxml.jackson.databind.ObjectMapper mapper) {
+        return new ru.itmo.highload.common.events.JdbcOutbox(jdbc,mapper);
+    }
     @Bean OrganizationService organizationService(OrganizationStore organizations,DeliveryPointStore points,PlatformTransactionManager tx) {
         return UseCaseTransactions.proxy(new OrganizationService(organizations,points),tx,"get*","list*","requireActive*");
     }
-    @Bean OrderService orderService(OrderStore orders,HistoryStore history,OrganizationService organizations,DishCatalog catalog,Clock clock,PlatformTransactionManager tx) {
-        return UseCaseTransactions.proxy(new OrderService(orders,history,organizations,catalog,clock),tx,"get*","list*","states","kitchenQueue");
+    @Bean OrderService orderService(OrderStore orders,HistoryStore history,OrganizationService organizations,DishCatalog catalog,Clock clock,ru.itmo.highload.common.domain.events.EventOutbox outbox,PlatformTransactionManager tx) {
+        return UseCaseTransactions.proxy(new OrderService(orders,history,organizations,catalog,clock,outbox),tx,"get*","list*","states","kitchenQueue");
     }
     @Bean KitchenCommands kitchenCommands(CommandReceipts receipts,OrderService orders,PlatformTransactionManager tx) {
         return UseCaseTransactions.proxy(new KitchenCommands(receipts,orders),tx);

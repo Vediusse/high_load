@@ -35,3 +35,8 @@ identity:
 spring:
   jpa:
     mapping-resources: META-INF/identity-domain.hbm.xml
+
+---
+identity:
+  notifications:
+    secret: ${NOTIFICATION_IDENTITY_SECRET:}

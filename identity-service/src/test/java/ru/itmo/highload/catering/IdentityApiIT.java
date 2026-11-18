@@ -303,6 +303,26 @@ class IdentityApiIT {
     }
 
     @Test
+    void recipientDirectoryRequiresServiceCredentialAndReturnsOnlyActiveScopedIds() {
+        var active=create("recipient-active",Set.of("ORGANIZATION_REPRESENTATIVE"),organizationId,201);
+        var blocked=create("recipient-blocked",Set.of("ORGANIZATION_REPRESENTATIVE"),organizationId,201);
+        UUID foreignOrg=UUID.randomUUID();
+        organizationBody="{\"id\":\""+foreignOrg+"\",\"active\":true}";
+        create("recipient-foreign",Set.of("ORGANIZATION_REPRESENTATIVE"),foreignOrg,201);
+        organizationBody=null;
+        users.block(UUID.fromString(blocked.get("id").asText()));
+        String path="/internal/v1/recipients?role=ORGANIZATION_REPRESENTATIVE&organizationId="+organizationId;
+        http.get().uri(path).exchange().expectStatus().isForbidden();
+        get(path,admin).exchange().expectStatus().isForbidden();
+        http.get().uri(path).header("X-Notification-Credential","wrong").exchange().expectStatus().isForbidden();
+        http.get().uri(path).header("X-Notification-Credential","test-notification-service-credential-42")
+                .exchange().expectStatus().isOk().expectBody().jsonPath("$.items.length()").isEqualTo(1)
+                .jsonPath("$.items[0]").isEqualTo(active.get("id").asText());
+        http.get().uri(path+"&size=51").header("X-Notification-Credential","test-notification-service-credential-42")
+                .exchange().expectStatus().isBadRequest();
+    }
+
+    @Test
     void supervisorCreatesReadsAndPaginatesWithoutSecrets() {
         var user = create("  Client.Manager  ", Set.of("CLIENT_MANAGER"), null, 201);
         assertThat(user.get("login").asText()).isEqualTo("client.manager");

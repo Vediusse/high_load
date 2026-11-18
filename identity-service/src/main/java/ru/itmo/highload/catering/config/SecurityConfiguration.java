@@ -44,6 +44,23 @@ import ru.itmo.highload.common.web.BlockingRequests;
 @Configuration
 @EnableConfigurationProperties({JwtProperties.class, ExchangeProperties.class})
 public class SecurityConfiguration {
+    @Bean @Order(-2)
+    SecurityWebFilterChain recipientSecurity(ServerHttpSecurity http, SecurityErrors errors,
+            @org.springframework.beans.factory.annotation.Value("${identity.notifications.secret:}") String credential) {
+        return http.securityMatcher(ServerWebExchangeMatchers.pathMatchers("/internal/v1/recipients", "/internal/v1/recipients/**"))
+                .csrf(ServerHttpSecurity.CsrfSpec::disable).httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
+                .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
+                .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
+                .requestCache(cache -> cache.requestCache(NoOpServerRequestCache.getInstance()))
+                .addFilterBefore((exchange,chain) -> {
+                    var values=exchange.getRequest().getHeaders().getOrEmpty("X-Notification-Credential");
+                    if (credential.length()<32 || values.size()!=1 || !MessageDigest.isEqual(
+                            credential.getBytes(StandardCharsets.UTF_8),values.getFirst().getBytes(StandardCharsets.UTF_8)))
+                        return errors.write(exchange,HttpStatus.FORBIDDEN);
+                    return chain.filter(exchange);
+                },SecurityWebFiltersOrder.AUTHENTICATION)
+                .authorizeExchange(access -> access.anyExchange().permitAll()).build();
+    }
     @Bean
     @Order(-1)
     SecurityWebFilterChain exchangeSecurity(ServerHttpSecurity http, JwtTokenService tokens,

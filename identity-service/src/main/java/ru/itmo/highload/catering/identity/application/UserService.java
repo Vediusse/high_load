@@ -93,6 +93,11 @@ public class UserService {
                 user.roleCodes(), user.effectiveOrganizationId());
     }
 
+    public PageResponse<UUID> recipients(RoleCode role, UUID organizationId, PageQuery page) {
+        var result=users.recipients(role,organizationId,page);
+        return new PageResponse<>(result.items(),page.page(),page.size(),result.hasNext());
+    }
+
     public UserResponse get(UUID id) {
         return toResponse(find(id));
     }

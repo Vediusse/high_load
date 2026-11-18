@@ -19,4 +19,8 @@ public class UserPersistence implements UserStore {
         var result = users.findBy(PageRequest.of(page.page(), page.size(), Sort.by("id")));
         return new PageResult<>(result.getContent(), page.page(), page.size(), -1, result.hasNext());
     }
+    public PageResult<UUID> recipients(ru.itmo.highload.catering.identity.domain.model.RoleCode role, UUID organizationId, PageQuery page) {
+        var result=users.recipients(role,organizationId,PageRequest.of(page.page(),page.size()));
+        return new PageResult<>(result.getContent(),page.page(),page.size(),-1,result.hasNext());
+    }
 }

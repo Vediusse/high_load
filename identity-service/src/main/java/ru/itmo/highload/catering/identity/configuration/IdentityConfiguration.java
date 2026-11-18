@@ -21,6 +21,6 @@ public class IdentityConfiguration {
             TokenIssuer tokens, OrganizationVerifier organizations, BootstrapLock lock,
             PlatformTransactionManager transactions) {
         return UseCaseTransactions.proxy(new UserService(users, roles, passwords, tokens, organizations, lock),
-                transactions, "login", "get", "list", "current", "validateCurrent");
+                transactions, "login", "get", "list", "current", "validateCurrent", "recipients");
     }
 }

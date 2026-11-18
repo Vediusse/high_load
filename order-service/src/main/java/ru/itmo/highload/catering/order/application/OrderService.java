@@ -43,6 +43,7 @@ public class OrderService {
     private final OrganizationService organizationService;
     private final DishCatalog catalogGateway;
     private final Clock clock;
+    private final ru.itmo.highload.common.domain.events.EventOutbox outbox;
 
     public OrderResponse createDraft(CreateOrderRequest request) {
         return createDraft(request, null);
@@ -231,7 +232,12 @@ public class OrderService {
     }
 
     public OrderResponse confirm(UUID id, long expectedVersion, OrderAccess access) {
-        return executeStatusCommand(id, expectedVersion, access, order -> order.confirm(clock.instant(), changedBy(access)));
+        var result = executeStatusCommand(id, expectedVersion, access, order -> order.confirm(clock.instant(), changedBy(access)));
+        var type = ru.itmo.highload.common.domain.events.EventType.ORDER_CONFIRMED;
+        var eventId = UUID.nameUUIDFromBytes((type+":"+result.id()+":"+result.version()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        outbox.append(new ru.itmo.highload.common.domain.events.EventEnvelope(eventId,type,result.id(),clock.instant(),1,
+                ru.itmo.highload.common.domain.events.EventEnvelope.Payload.order(result.organizationId(),result.version(),changedBy(access))));
+        return result;
     }
 
     public OrderResponse reject(UUID id, RejectOrderRequest request) {

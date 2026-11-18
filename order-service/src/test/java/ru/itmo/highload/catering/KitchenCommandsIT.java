@@ -11,17 +11,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import ru.itmo.highload.catering.order.dto.in.CreateOrderRequest;
-import ru.itmo.highload.catering.order.dto.in.KitchenAction;
-import ru.itmo.highload.catering.order.dto.in.KitchenCommand;
-import ru.itmo.highload.catering.order.dto.in.OrderLineInput;
-import ru.itmo.highload.catering.order.dto.in.ReplaceOrderLinesRequest;
-import ru.itmo.highload.catering.order.dto.out.OrderResponse;
-import ru.itmo.highload.catering.order.entity.OrderStatus;
-import ru.itmo.highload.catering.order.service.*;
-import ru.itmo.highload.catering.organization.entity.*;
-import ru.itmo.highload.catering.organization.repository.*;
-import ru.itmo.highload.common.error.ApiException;
+import ru.itmo.highload.catering.order.application.dto.in.CreateOrderRequest;
+import ru.itmo.highload.catering.order.application.dto.in.KitchenAction;
+import ru.itmo.highload.catering.order.application.dto.in.KitchenCommand;
+import ru.itmo.highload.catering.order.application.dto.in.OrderLineInput;
+import ru.itmo.highload.catering.order.application.dto.in.ReplaceOrderLinesRequest;
+import ru.itmo.highload.catering.order.application.dto.out.OrderResponse;
+import ru.itmo.highload.catering.order.domain.model.OrderStatus;
+import ru.itmo.highload.catering.order.application.*;
+import ru.itmo.highload.catering.organization.domain.model.*;
+import ru.itmo.highload.catering.organization.adapters.out.persistence.*;
+import ru.itmo.highload.common.domain.BusinessFailure;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient
@@ -84,11 +84,11 @@ class KitchenCommandsIT extends AbstractPostgresIT {
                 new KitchenCommand(command.commandId(), OrderStatus.CONFIRMED, order.version()+1, command.action()),
                 new KitchenCommand(command.commandId(), OrderStatus.READY, order.version(), command.action()),
                 new KitchenCommand(command.commandId(), OrderStatus.CONFIRMED, order.version(), KitchenAction.COMPLETE))) {
-            assertThatThrownBy(() -> commands.execute(order.id(), changed)).isInstanceOfSatisfying(ApiException.class,
-                    error -> assertThat(error.getCode()).isEqualTo("COMMAND_ID_CONFLICT"));
+            assertThatThrownBy(() -> commands.execute(order.id(), changed)).isInstanceOfSatisfying(BusinessFailure.class,
+                    error -> assertThat(error.code()).isEqualTo("COMMAND_ID_CONFLICT"));
         }
-        assertThatThrownBy(() -> commands.execute(UUID.randomUUID(), command)).isInstanceOfSatisfying(ApiException.class,
-                error -> assertThat(error.getCode()).isEqualTo("COMMAND_ID_CONFLICT"));
+        assertThatThrownBy(() -> commands.execute(UUID.randomUUID(), command)).isInstanceOfSatisfying(BusinessFailure.class,
+                error -> assertThat(error.code()).isEqualTo("COMMAND_ID_CONFLICT"));
         assertThat(count("kitchen_command", order.id())).isEqualTo(1);
     }
 
@@ -100,7 +100,7 @@ class KitchenCommandsIT extends AbstractPostgresIT {
             Callable<String> task = () -> {
                 barrier.await(5, TimeUnit.SECONDS);
                 try { commands.execute(order.id(), start(order)); return "OK"; }
-                catch (ApiException error) { return error.getCode(); }
+                catch (BusinessFailure error) { return error.code(); }
             };
             var first = pool.submit(task); var second = pool.submit(task);
             assertThat(List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)))

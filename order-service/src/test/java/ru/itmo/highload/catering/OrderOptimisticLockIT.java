@@ -17,18 +17,18 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import ru.itmo.highload.catering.CatalogFixture.Dish;
-import ru.itmo.highload.catering.order.dto.in.CreateOrderRequest;
-import ru.itmo.highload.catering.order.dto.in.OrderLineInput;
-import ru.itmo.highload.catering.order.dto.in.RejectOrderRequest;
-import ru.itmo.highload.catering.order.dto.in.ReplaceOrderLinesRequest;
-import ru.itmo.highload.catering.order.dto.in.UpdateOrderDetailsRequest;
-import ru.itmo.highload.catering.order.dto.out.OrderResponse;
-import ru.itmo.highload.catering.order.service.OrderService;
-import ru.itmo.highload.catering.organization.entity.DeliveryPoint;
-import ru.itmo.highload.catering.organization.entity.Organization;
-import ru.itmo.highload.catering.organization.repository.DeliveryPointRepository;
-import ru.itmo.highload.catering.organization.repository.OrganizationRepository;
-import ru.itmo.highload.common.error.ApiException;
+import ru.itmo.highload.catering.order.application.dto.in.CreateOrderRequest;
+import ru.itmo.highload.catering.order.application.dto.in.OrderLineInput;
+import ru.itmo.highload.catering.order.application.dto.in.RejectOrderRequest;
+import ru.itmo.highload.catering.order.application.dto.in.ReplaceOrderLinesRequest;
+import ru.itmo.highload.catering.order.application.dto.in.UpdateOrderDetailsRequest;
+import ru.itmo.highload.catering.order.application.dto.out.OrderResponse;
+import ru.itmo.highload.catering.order.application.OrderService;
+import ru.itmo.highload.catering.organization.domain.model.DeliveryPoint;
+import ru.itmo.highload.catering.organization.domain.model.Organization;
+import ru.itmo.highload.catering.organization.adapters.out.persistence.DeliveryPointRepository;
+import ru.itmo.highload.catering.organization.adapters.out.persistence.OrganizationRepository;
+import ru.itmo.highload.common.domain.BusinessFailure;
 
 @SpringBootTest
 class OrderOptimisticLockIT extends AbstractPostgresIT {
@@ -153,8 +153,8 @@ class OrderOptimisticLockIT extends AbstractPostgresIT {
                                 comment,
                                 draft.version()));
                 return "SUCCESS";
-            } catch (ApiException exception) {
-                return exception.getCode();
+            } catch (BusinessFailure exception) {
+                return exception.code();
             }
         };
     }
@@ -176,8 +176,8 @@ class OrderOptimisticLockIT extends AbstractPostgresIT {
                             new RejectOrderRequest(submitted.version(), "нет мощности"));
                 }
                 return "SUCCESS";
-            } catch (ApiException exception) {
-                return exception.getCode();
+            } catch (BusinessFailure exception) {
+                return exception.code();
             }
         };
     }

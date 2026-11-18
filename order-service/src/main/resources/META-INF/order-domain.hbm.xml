@@ -1,0 +1,84 @@
+<?xml version="1.0" ?>
+<hibernate-mapping xmlns="http://www.hibernate.org/xsd/hibernate-mapping" default-access="field" auto-import="true">
+  <class name="ru.itmo.highload.catering.order.domain.model.OrderLine" table="order_line">
+    <id name="id" type="uuid" column="id">
+      <generator class="assigned"/>
+    </id>
+    <many-to-one name="order" class="ru.itmo.highload.catering.order.domain.model.CorporateOrder" column="order_id" lazy="proxy" not-null="true"/>
+    <property name="dishId" column="dish_id" not-null="true" type="uuid"/>
+    <property name="dishNameSnapshot" column="dish_name_snapshot" length="200" type="string"/>
+    <property name="quantity" column="quantity" not-null="true" type="integer"/>
+    <property name="unitPriceSnapshot" column="unit_price_snapshot" precision="19" scale="2" type="big_decimal"/>
+  </class>
+  <class name="ru.itmo.highload.catering.order.domain.model.CorporateOrder" table="corporate_order">
+    <id name="id" type="uuid" column="id">
+      <generator class="assigned"/>
+    </id>
+    <version name="version" type="long" column="version"/>
+    <property name="organizationId" column="organization_id" not-null="true" type="uuid"/>
+    <property name="deliveryPointId" column="delivery_point_id" not-null="true" type="uuid"/>
+    <property name="requestedDeliveryAt" column="requested_delivery_at" not-null="true" type="java.time.Instant"/>
+    <property name="status" column="status" not-null="true" length="32">
+      <type name="org.hibernate.type.EnumType">
+        <param name="enumClass">ru.itmo.highload.catering.order.domain.model.OrderStatus</param>
+        <param name="useNamed">true</param>
+      </type>
+    </property>
+    <property name="totalAmount" column="total_amount" not-null="true" precision="19" scale="2" type="big_decimal"/>
+    <property name="comment" column="comment" length="1000" type="string"/>
+    <property name="createdAt" column="created_at" not-null="true" update="false" type="java.time.Instant"/>
+    <bag name="lines" inverse="true" lazy="true" cascade="all-delete-orphan" optimistic-lock="true" order-by="id ASC">
+      <key column="order_id"/>
+      <one-to-many class="ru.itmo.highload.catering.order.domain.model.OrderLine"/>
+    </bag>
+    <bag name="history" inverse="true" lazy="true" cascade="all" optimistic-lock="false" order-by="changed_at ASC, id ASC">
+      <key column="order_id"/>
+      <one-to-many class="ru.itmo.highload.catering.order.domain.model.OrderStatusHistory"/>
+    </bag>
+  </class>
+  <class name="ru.itmo.highload.catering.order.domain.model.OrderStatusHistory" table="order_status_history">
+    <id name="id" type="uuid" column="id">
+      <generator class="assigned"/>
+    </id>
+    <many-to-one name="order" class="ru.itmo.highload.catering.order.domain.model.CorporateOrder" column="order_id" lazy="proxy" not-null="true"/>
+    <property name="fromStatus" column="from_status" not-null="true" length="32">
+      <type name="org.hibernate.type.EnumType">
+        <param name="enumClass">ru.itmo.highload.catering.order.domain.model.OrderStatus</param>
+        <param name="useNamed">true</param>
+      </type>
+    </property>
+    <property name="toStatus" column="to_status" not-null="true" length="32">
+      <type name="org.hibernate.type.EnumType">
+        <param name="enumClass">ru.itmo.highload.catering.order.domain.model.OrderStatus</param>
+        <param name="useNamed">true</param>
+      </type>
+    </property>
+    <property name="reason" column="reason" length="500" type="string"/>
+    <property name="changedBy" column="changed_by" type="uuid"/>
+    <property name="changedAt" column="changed_at" not-null="true" type="java.time.Instant"/>
+  </class>
+  <class name="ru.itmo.highload.catering.organization.domain.model.Organization" table="organization">
+    <id name="id" type="uuid" column="id">
+      <generator class="assigned"/>
+    </id>
+    <version name="version" type="long" column="version"/>
+    <property name="name" column="name" not-null="true" length="200" type="string"/>
+    <property name="phone" column="phone" not-null="true" length="32" type="string"/>
+    <property name="active" column="active" not-null="true" type="boolean"/>
+    <set name="deliveryPoints" inverse="true" lazy="true" cascade="none" optimistic-lock="false">
+      <key column="organization_id"/>
+      <one-to-many class="ru.itmo.highload.catering.organization.domain.model.DeliveryPoint"/>
+    </set>
+  </class>
+  <class name="ru.itmo.highload.catering.organization.domain.model.DeliveryPoint" table="delivery_point">
+    <id name="id" type="uuid" column="id">
+      <generator class="assigned"/>
+    </id>
+    <many-to-one name="organization" class="ru.itmo.highload.catering.organization.domain.model.Organization" column="organization_id" lazy="proxy" not-null="true"/>
+    <property name="name" column="name" not-null="true" length="200" type="string"/>
+    <property name="address" column="address" not-null="true" length="500" type="string"/>
+    <property name="contactName" column="contact_name" not-null="true" length="200" type="string"/>
+    <property name="contactPhone" column="contact_phone" not-null="true" length="32" type="string"/>
+    <property name="active" column="active" not-null="true" type="boolean"/>
+  </class>
+</hibernate-mapping>

@@ -12,8 +12,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
-import ru.itmo.highload.catering.organization.entity.Organization;
-import ru.itmo.highload.catering.organization.repository.OrganizationRepository;
+import ru.itmo.highload.catering.organization.domain.model.Organization;
+import ru.itmo.highload.catering.organization.adapters.out.persistence.OrganizationRepository;
 
 @SpringBootTest
 class PersistenceConstraintsIT extends AbstractPostgresIT {

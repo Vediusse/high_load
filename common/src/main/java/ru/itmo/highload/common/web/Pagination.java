@@ -7,6 +7,10 @@ import ru.itmo.highload.common.dto.out.FieldErrorResponse;
 import ru.itmo.highload.common.error.RequestValidationException;
 
 public final class Pagination {
+    public static ru.itmo.highload.common.domain.PageQuery query(int page, int size) {
+        pageRequest(page, size);
+        return ru.itmo.highload.common.domain.PageQuery.of(page, size);
+    }
 
     public static final int DEFAULT_SIZE = 20;
     public static final int MAX_SIZE = 50;

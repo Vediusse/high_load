@@ -12,6 +12,10 @@ configuration: wiring and transaction boundaries. ArchUnit enforces direction.
 Refactor catalog, order, kitchen, identity individually; preserve API, pagination,
 error DTOs, optimistic locking, transactions and security at each step.
 Do not invent business layers in gateway/config/discovery.
+Order keeps its managed plain-Java aggregates: persistence metadata is an external
+Hibernate mapping in META-INF/order-domain.hbm.xml. Explicit collection optimistic
+locking is retained there; the domain imports no ORM annotations. Transactions are
+wired around use cases, and repository/query/receipt operations are output ports.
 
 Kafka and events
 Three KRaft broker/controllers, distinct IDs and persistent volumes. order-events,

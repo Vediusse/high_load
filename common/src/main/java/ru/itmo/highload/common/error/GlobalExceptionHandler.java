@@ -16,6 +16,19 @@ import ru.itmo.highload.common.dto.out.FieldErrorResponse;
 @RestControllerAdvice
 @org.springframework.core.annotation.Order(org.springframework.core.Ordered.LOWEST_PRECEDENCE)
 public class GlobalExceptionHandler {
+    @ExceptionHandler(ru.itmo.highload.common.domain.BusinessFailure.class)
+    ApiError business(ru.itmo.highload.common.domain.BusinessFailure error, ServerWebExchange exchange) {
+        HttpStatus status = switch (error.kind()) {
+            case VALIDATION -> HttpStatus.BAD_REQUEST;
+            case UNAUTHENTICATED -> HttpStatus.UNAUTHORIZED;
+            case FORBIDDEN -> HttpStatus.FORBIDDEN;
+            case NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case CONFLICT -> HttpStatus.CONFLICT;
+            case REJECTED -> HttpStatus.UNPROCESSABLE_ENTITY;
+            case UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+        };
+        return response(status, error.code(), error.getMessage(), List.of(), exchange);
+    }
     @ExceptionHandler(java.util.concurrent.RejectedExecutionException.class)
     ApiError overloaded(java.util.concurrent.RejectedExecutionException error, ServerWebExchange exchange) {
         return response(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_BUSY", "Сервис занят, повторите запрос позже", List.of(), exchange);

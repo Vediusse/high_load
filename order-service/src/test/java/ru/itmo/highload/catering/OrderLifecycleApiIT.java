@@ -20,15 +20,15 @@ import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 import ru.itmo.highload.catering.CatalogFixture.Dish;
-import ru.itmo.highload.catering.order.dto.in.CreateOrderRequest;
-import ru.itmo.highload.catering.order.dto.in.OrderLineInput;
-import ru.itmo.highload.catering.order.dto.in.ReplaceOrderLinesRequest;
-import ru.itmo.highload.catering.order.dto.out.OrderResponse;
-import ru.itmo.highload.catering.order.service.OrderService;
-import ru.itmo.highload.catering.organization.entity.DeliveryPoint;
-import ru.itmo.highload.catering.organization.entity.Organization;
-import ru.itmo.highload.catering.organization.repository.DeliveryPointRepository;
-import ru.itmo.highload.catering.organization.repository.OrganizationRepository;
+import ru.itmo.highload.catering.order.application.dto.in.CreateOrderRequest;
+import ru.itmo.highload.catering.order.application.dto.in.OrderLineInput;
+import ru.itmo.highload.catering.order.application.dto.in.ReplaceOrderLinesRequest;
+import ru.itmo.highload.catering.order.application.dto.out.OrderResponse;
+import ru.itmo.highload.catering.order.application.OrderService;
+import ru.itmo.highload.catering.organization.domain.model.DeliveryPoint;
+import ru.itmo.highload.catering.organization.domain.model.Organization;
+import ru.itmo.highload.catering.organization.adapters.out.persistence.DeliveryPointRepository;
+import ru.itmo.highload.catering.organization.adapters.out.persistence.OrganizationRepository;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient
@@ -262,7 +262,7 @@ class OrderLifecycleApiIT extends AbstractPostgresIT {
                 order.organizationId(),
                 order.deliveryPointId(),
                 order.requestedDeliveryAt(),
-                ru.itmo.highload.catering.order.entity.OrderStatus.valueOf(response.get("status").asText()),
+                ru.itmo.highload.catering.order.domain.model.OrderStatus.valueOf(response.get("status").asText()),
                 response.get("totalAmount").decimalValue(),
                 order.comment(),
                 response.get("version").asLong(),
@@ -328,7 +328,7 @@ class OrderLifecycleApiIT extends AbstractPostgresIT {
                 original.organizationId(),
                 original.deliveryPointId(),
                 original.requestedDeliveryAt(),
-                ru.itmo.highload.catering.order.entity.OrderStatus.valueOf(response.get("status").asText()),
+                ru.itmo.highload.catering.order.domain.model.OrderStatus.valueOf(response.get("status").asText()),
                 response.get("totalAmount").decimalValue(),
                 original.comment(),
                 response.get("version").asLong(),

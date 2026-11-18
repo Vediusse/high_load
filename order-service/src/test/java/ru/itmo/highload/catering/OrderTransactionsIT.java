@@ -14,16 +14,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataAccessException;
 import ru.itmo.highload.catering.CatalogFixture.Dish;
-import ru.itmo.highload.catering.order.dto.in.CreateOrderRequest;
-import ru.itmo.highload.catering.order.dto.in.OrderLineInput;
-import ru.itmo.highload.catering.order.dto.in.ReplaceOrderLinesRequest;
-import ru.itmo.highload.catering.order.dto.out.OrderResponse;
-import ru.itmo.highload.catering.order.service.OrderService;
-import ru.itmo.highload.catering.organization.entity.DeliveryPoint;
-import ru.itmo.highload.catering.organization.entity.Organization;
-import ru.itmo.highload.catering.organization.repository.DeliveryPointRepository;
-import ru.itmo.highload.catering.organization.repository.OrganizationRepository;
+import ru.itmo.highload.catering.order.application.dto.in.CreateOrderRequest;
+import ru.itmo.highload.catering.order.application.dto.in.OrderLineInput;
+import ru.itmo.highload.catering.order.application.dto.in.ReplaceOrderLinesRequest;
+import ru.itmo.highload.catering.order.application.dto.out.OrderResponse;
+import ru.itmo.highload.catering.order.application.OrderService;
+import ru.itmo.highload.catering.organization.domain.model.DeliveryPoint;
+import ru.itmo.highload.catering.organization.domain.model.Organization;
+import ru.itmo.highload.catering.organization.adapters.out.persistence.DeliveryPointRepository;
+import ru.itmo.highload.catering.organization.adapters.out.persistence.OrganizationRepository;
 import ru.itmo.highload.common.error.ApiException;
+import ru.itmo.highload.common.domain.BusinessFailure;
 
 @SpringBootTest
 class OrderTransactionsIT extends AbstractPostgresIT {
@@ -38,7 +39,7 @@ class OrderTransactionsIT extends AbstractPostgresIT {
     DeliveryPointRepository deliveryPointRepository;
 
     @Autowired
-    ru.itmo.highload.catering.catalog.service.CatalogGateway catalogGateway;
+    ru.itmo.highload.catering.catalog.adapters.out.feign.CatalogGateway catalogGateway;
 
     @Test
     void largeCatalogReadUsesBoundedBatchesAndFailureCannotPartiallyReplaceOrder() {
@@ -365,8 +366,8 @@ class OrderTransactionsIT extends AbstractPostgresIT {
         assertThat(persisted.lines()).containsExactlyInAnyOrderElementsOf(swapped.lines());
         assertThatThrownBy(() -> orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
                 sameTotal.version(), List.of(new OrderLineInput(first.getId(), 9))), ru.itmo.highload.common.security.TestTokens.bearer()))
-                .isInstanceOfSatisfying(ApiException.class, error ->
-                        assertThat(error.getCode()).isEqualTo("ORDER_VERSION_CONFLICT"));
+                .isInstanceOfSatisfying(BusinessFailure.class, error ->
+                        assertThat(error.code()).isEqualTo("ORDER_VERSION_CONFLICT"));
 
         OrderResponse replaced = orderService.replaceDraftLines(draft.id(), new ReplaceOrderLinesRequest(
                 swapped.version(), List.of(new OrderLineInput(first.getId(), 2),

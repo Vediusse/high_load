@@ -58,6 +58,8 @@ def start(service):
 
 
 suffix = str(uuid.uuid4())[:8]
+# A preceding outage check may restart Catalog before Gateway refreshes Eureka.
+api("GET", "/dishes?limit=1", retry_unavailable=True)
 org = api("POST", "/organizations", {"name": "Кухня " + suffix, "phone": "+79991234567"}, 201)
 point = api("POST", f"/organizations/{org['id']}/delivery-points", {"name": "Офис", "address": "Адрес",
     "contactName": "Иван", "contactPhone": "+79991234567"}, 201)

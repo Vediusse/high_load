@@ -1,0 +1,41 @@
+Лабораторная 2 — отдельное локальное окружение
+
+Папка: /Users/rublev/DEV/high_load_lab2
+Ветка: feature/lab2 (Git worktree основного репозитория)
+Docker Compose проект: high-load-lab2
+API: http://localhost:18081/api/v1
+Swagger: http://localhost:18081/swagger-ui/index.html
+Health: http://localhost:18081/actuator/health
+
+Lab3 остаётся в /Users/rublev/DEV/high_load на ветке feature/lab3
+и доступна на http://localhost:18082.
+У лабораторных отдельные контейнеры, сети и тома PostgreSQL.
+Настройки имени проекта, порта и пароли lab2 сохранены в локальном .env.
+
+Запуск lab2 (готовые образы):
+  cd /Users/rublev/DEV/high_load_lab2
+  docker compose up -d --no-build --wait
+
+Остановка только lab2 с сохранением данных:
+  cd /Users/rublev/DEV/high_load_lab2
+  docker compose stop
+
+Пересборка после изменений:
+  cd /Users/rublev/DEV/high_load_lab2
+  docker compose up -d --build --wait
+
+Полная проверка исходников (Java 21, Docker):
+  cd /Users/rublev/DEV/high_load_lab2
+  JAVA_HOME=$(/usr/libexec/java_home -v 21) ./mvnw clean verify
+
+Проверка запущенного окружения:
+  ./scripts/lab2-infrastructure.sh high-load-lab2 http://localhost:18081
+  python3 scripts/lab2-topology.py high-load-lab2 http://localhost:18081
+  ./scripts/lab2-catalog.sh high-load-lab2 http://localhost:18081
+  python3 scripts/lab2-kitchen.py high-load-lab2 http://localhost:18081
+
+Проверки создают демонстрационные данные. Последние две временно
+останавливают сервисы lab2 и восстанавливают их, проверяя обработку отказов.
+Проверка кухни ожидает восстановление маршрута каталога и допускает
+ограниченное ожидание circuit breaker после намеренного отказа Order.
+Lab3 эти команды не затрагивают.

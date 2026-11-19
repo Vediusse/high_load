@@ -63,7 +63,7 @@ poison/DLT и replay без дублей. Полный Kafka outage сохран
 после восстановления pending доставлен. Notification outage/backlog пройдены.
 
 Config Server читает HTTPS GitHub напрямую, без local override:
-label lab4, commit 7611e569bf405268c8d34e1c63c4a1aaff02ec6a.
+label lab4, commit ece3f7c95ee3eb71762c0fa092c03545bcb6f2e0.
 Доступы — CREDENTIALS.local.md и ADMIN-ACCESS.local.md (0600, Git ignored).
 .env/доступы/backup отсутствуют в Git и Docker build context.
 Инструкция и схемы: docs/lab4-s3-runtime.md; бизнес-демо: docs/lab4-run.md.
@@ -105,3 +105,33 @@ PDF встроены в JSON, Working directory не нужен. Специфи�
 ACTIVE после Run, удаляется отдельный временный экземпляр.
 Environment с реальными секретами — только локальный файл 0600, Git/Docker ignored.
 Java не менялась; Maven baseline 201 tests/статические проверки остаётся прежней.
+
+Обновление структуры Postman/документации 2026-11-20
+Postman lab4 — подпапки и карта проекта, 2026-11-20
+
+Коллекция: 4 независимые родительские папки, 139 запросов.
+Бизнес: 40; файлы: 41; уведомления: 32; runtime: 26.
+В каждой папке отдельные подразделы: подготовка, основной сценарий,
+побочные случаи/ошибки, права и результат. Основной заказ имеет один итоговый GET;
+у спецификации одно основное скачивание. Проверки доступа и скачивание акта
+вынесены отдельно; дублирующее финальное скачивание спецификации удалено.
+
+Два полных прогона нового дерева: 288 HTTP requests с учётом polling,
+474 assertions, 0 failures. Все 139 request IDs уникальны; 152 scripts compile.
+Повторяемость родительских папок и переходы Runner по вложенным GET проверены.
+
+Отдельно выполнены runtime-подпапки, как при ручном показе:
+подготовка -> состояние до -> Git commit 2048 -> применить через Kafka ->
+поведение 413 -> итог -> состояние до -> Git restore -> применить -> 201 -> итог.
+40 HTTP requests / 66 assertions / 0 failures.
+Environment переносится между отдельными Run подпапок, JWT/ID не теряются.
+Процесс File Service не перезапускался; StartedAt: 2026-11-19T20:39:50.789223052Z.
+Лимит восстановлен к 10485760. Актуальный config-repo lab4: ece3f7c95ee3eb71762c0fa092c03545bcb6f2e0.
+GitHub остаётся источником конфигов; изменения сборки/Config Server не делались.
+
+Документация: docs/PROJECT-MAP.md, postman/README.md.
+Схемы: docs/diagrams/services и configuration в DOT/SVG/PNG.
+Различены build/start/runtime, указаны код, volumes и готовый GitHub UI.
+Проверены первичные документы Spring Cloud Config/Bus, GitHub Web Editor,
+Spring Boot Admin, Nacos, SCCA; архитектура не заменена другим config backend.
+Java не менялась, базовые Maven 201 tests / Spotless / PMD / ArchUnit не повторялись.

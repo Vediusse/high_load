@@ -1,0 +1,41 @@
+digraph Services {
+  graph [rankdir=LR, bgcolor="white", pad=0.35, nodesep=0.45, ranksep=1.0,
+         fontname="Arial", fontsize=24, labelloc=t,
+         label="Lab4: бизнес-запросы, события и файлы\nУ каждого бизнес-сервиса своя PostgreSQL"];
+  node [shape=box, style="rounded,filled", fillcolor="#edf3fc", color="#496486",
+        fontname="Arial", fontsize=16, margin="0.22,0.14"];
+  edge [fontname="Arial", fontsize=12, color="#526578", arrowsize=0.8];
+
+  client [label="Postman / Swagger\nпользователь", fillcolor="#f2f4f7"];
+  gateway [label="Gateway\nlocalhost:18084\nпроверка JWT → Identity", fillcolor="#dfeaff"];
+  identity [label="Identity\nпользователи, роли, JWT\nPostgreSQL"];
+  catalog [label="Catalog\nкатегории, блюда, цены\nPostgreSQL / R2DBC"];
+  order [label="Order\nорганизации, точки, заказы\nистория + outbox + PostgreSQL"];
+  kitchen [label="Kitchen\nручные команды кухни\nпроекция + outbox + PostgreSQL"];
+  file [label="File\nметаданные, доступ, checksum\noutbox + PostgreSQL"];
+  notification [label="Notification\nличная лента, прочтение\ninbox + PostgreSQL"];
+  kafka [label="Kafka × 3\norder-events / production-events\nfile-events + DLT\nRF3 · minISR2", fillcolor="#f1e8fc", color="#8155a1"];
+  s3 [label="Локальное S3 / Silo\nсодержимое файлов\nvolume s3-data\nConsole localhost:19001", fillcolor="#e4f3ea", color="#4a8060"];
+  note [shape=note, label="Серые стрелки: HTTP / команды\nФиолетовые: события Kafka\nЗелёная: S3 API\n\nConfig и Eureka — на отдельной схеме",
+        fillcolor="#fff8e6", color="#c7ac62", fontsize=13];
+
+  {rank=same; identity; catalog; order; kitchen; file; notification;}
+  {rank=same; kafka; s3; note;}
+  client -> gateway;
+  gateway -> identity;
+  gateway -> catalog;
+  gateway -> order;
+  gateway -> kitchen;
+  gateway -> file;
+  gateway -> notification;
+  kitchen -> order [label="команды", constraint=false];
+  order -> catalog [label="цены", constraint=false];
+  file -> order [label="доступ к заказу", constraint=false];
+  file -> s3 [label="bytes", color="#3d8859", fontcolor="#3d8859", penwidth=2];
+  order -> kafka [label="outbox", color="#8950a8", fontcolor="#8950a8"];
+  kitchen -> kafka [color="#8950a8"];
+  file -> kafka [color="#8950a8"];
+  kafka -> notification [label="уведомления", color="#8950a8", fontcolor="#8950a8", constraint=false];
+  kafka -> kitchen [label="проекция заказов", color="#8950a8", fontcolor="#8950a8", constraint=false];
+  kafka -> order [label="ссылки fileId", color="#8950a8", fontcolor="#8950a8", constraint=false];
+}

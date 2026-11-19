@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# coding: utf-8
 """Build the portable Lab4 collection and public environment template."""
 import json
 from pathlib import Path
@@ -63,6 +64,14 @@ class Folder:
     def __init__(self, prefix, name, description):
         self.prefix = prefix
         self.node = {'name': name, 'description': description, 'item': []}
+        self.items = self.node['item']
+        self.request_count = 0
+
+    def section(self, name, description=''):
+        group = {'id': str(uuid.uuid5(NAMESPACE, self.prefix + '/section/' + name)),
+                 'name': name, 'description': description, 'item': []}
+        self.node['item'].append(group)
+        self.items = group['item']
 
     def v(self, name):
         return '{{' + self.prefix + '_' + name + '}}'
@@ -72,7 +81,8 @@ class Folder:
 
     def add(self, title, method, path, actor=None, body=None, status=200,
             tests='', pre='', description='', admin=False, raw=False):
-        index = len(self.node['item']) + 1
+        self.request_count += 1
+        index = self.request_count
         request = {'method': method, 'header': [], 'url': '{{baseUrl}}' + path,
                    'auth': {'type': 'noauth'}, 'description': description}
         if actor:
@@ -102,8 +112,8 @@ class Folder:
         checks += self.js(tests)
         scripts.append({'listen': 'test', 'script': {'type': 'text/javascript', 'exec': lines(checks)}})
         item = {'id': str(uuid.uuid5(NAMESPACE, f'{self.prefix}/{index}/{title}')),
-                'name': f'{index:02}. {title}', 'request': request, 'event': scripts}
-        self.node['item'].append(item)
+                'name': f'{len(self.items) + 1:02}. {title}', 'request': request, 'event': scripts}
+        self.items.append(item)
         return item
 
     def save(self, key, field='id'):
@@ -144,6 +154,8 @@ class Folder:
         self.login(actor)
 
     def setup(self):
+        self.section('00 — Подготовка: роли, организация, меню',
+                     'Запустить один раз перед подпапками этого сценария. Run родительской папки сам выполнит подготовку. Повторный Run подготовки создаёт новые данные.')
         self.login('supervisor')
         self.user('client', 'CLIENT_MANAGER')
         self.user('kitchen', 'KITCHEN_MANAGER')
@@ -267,15 +279,22 @@ class Folder:
             pm.expect(crypto.SHA256(pm.response.text()).toString()).to.eql(pm.environment.get('$P_''' + key + '''Checksum'));
         });
         '''
-        self.add(actor.upper() + ' — скачать ' + key + (' / Send and Download' if status == 200 else ''),
+        title = actor.upper() + ' — скачать ' + key + ' / Send and Download'
+        description = 'Откройте этот запрос после Run: Send and Download либо Save response → Save to a file. Для обновления токена используйте OWNER — вход в подготовке этой папки. Спецификация и акт остаются ACTIVE.'
+        if actor != 'owner' or status != 200:
+            title = 'Проверка доступа ' + actor.upper() + ' к ' + key + ' → ' + str(status)
+            description = 'Отдельная проверка прав или логического удаления. Основное скачивание документа находится в подпапке спецификации/акта.'
+        self.add(title,
                  'GET', '/api/v1/files/' + self.v(key + 'Id'), actor, status=status, tests=tests,
-                 description='После Run откройте запрос и нажмите Send and Download либо Save response → Save to a file. Для повторного входа используйте OWNER — вход в этой же папке. Основная спецификация и акт остаются ACTIVE.')
+                 description=description)
 
 
 business = Folder('biz', '01 — Бизнес: пользователи → организация → меню → заказ → кухня',
                   'Самостоятельный повторяемый сценарий. Создаёт отдельные роли, организацию и меню, проводит заказ до COMPLETED, показывает снимок цены, историю, отклонение, отмену и удаление черновика. Все запросы видимы; чужие данные не меняются.')
 business.setup()
 business.add('Представитель — своя организация', 'GET', '/api/v1/organizations/' + business.v('orgId'), 'owner')
+business.section('01 — Основной путь: заказ → кухня → выдача',
+                 'Один заказ до COMPLETED. Здесь же снимок цены и история; в конце один итоговый GET заказа.')
 business.prepared_order(False)
 business.add('Кухня — новая цена блюда 350', 'PUT', '/api/v1/dishes/' + business.v('dishId'), 'kitchen', business.dish_body(350))
 business.add('Представитель — снимок цены заказа не изменился', 'GET', '/api/v1/orders/' + business.v('orderId'), 'owner', tests='''
@@ -298,11 +317,16 @@ pm.test('Вся цепочка и changedBy', () => {
 });
 ''')
 business.add('Кухня — вернуть цену 250 для следующих заказов', 'PUT', '/api/v1/dishes/' + business.v('dishId'), 'kitchen', business.dish_body(250))
+business.add('Представитель — итоговый выданный заказ', 'GET', '/api/v1/orders/' + business.v('orderId'), 'owner',
+             tests=business.order_checks('order', 'COMPLETED'))
 for key, action, status in [('rejected', 'reject', 'REJECTED'), ('cancelled', 'cancel', 'CANCELLED')]:
+    business.section('02 — Отдельный случай: отклонение' if action == 'reject' else '03 — Отдельный случай: отмена',
+                     'Отдельный заказ и свои ID; основной выданный заказ не меняется. Выполнять после подготовки.')
     business.create_order(key)
     business.order_lines(key)
     business.transition('submit', 'SUBMITTED', 'owner', key)
     business.transition(action, status, 'kitchen' if action == 'reject' else 'owner', key, 'Postman: демонстрация причины')
+business.section('04 — Черновик: изменить, конфликт версии, удалить')
 business.create_order('draft')
 details = {'deliveryPointId': business.v('pointId'), 'requestedDeliveryAt': business.v('future'),
            'comment': 'Исправленный черновик', 'expectedVersion': business.v('draftVersion')}
@@ -312,14 +336,15 @@ business.add('Представитель — старая version → 409', 'PUT
              'owner', {**details, 'expectedVersion': 0}, 409)
 business.add('Представитель — удалить пустой черновик', 'DELETE', '/api/v1/orders/' + business.v('draftId'), 'owner', status=204)
 business.add('Удалённый черновик → 404', 'GET', '/api/v1/orders/' + business.v('draftId'), 'owner', status=404)
+business.section('05 — Проверка ролевого запрета')
 business.add('SUPERVISOR без бизнес-роли → 403', 'GET', '/api/v1/orders/' + business.v('orderId'), 'supervisor', status=403)
-business.add('Представитель — итоговый выданный заказ', 'GET', '/api/v1/orders/' + business.v('orderId'), 'owner',
-             tests=business.order_checks('order', 'COMPLETED'))
 
 files = Folder('files', '02 — Файлы: S3, скачать PDF, доступ, акт, удаление',
                'Независимый сценарий с собственными пользователями и подтверждённым заказом. PDF встроен; никакие пути к файлам выбирать не нужно. Спецификация и акт остаются доступными после Run; удаляется отдельный тестовый экземпляр.')
 files.setup()
 files.prepared_order()
+files.section('01 — Спецификация: загрузить, скачать, проверить связь',
+              'Основной сценарий для показа. Один активный PDF: загрузка, скачивание, метаданные и событийная ссылка. Этот GET можно открыть после всего прогона и сохранить PDF.')
 files.upload()
 files.download()
 files.add('Метаданные файла в заказе', 'GET', '/api/v1/orders/' + files.v('orderId') + '/files', 'owner', tests='''
@@ -327,33 +352,41 @@ pm.test('Есть спецификация', () => pm.expect(pm.response.json().
 ''')
 files.add('Дождаться ссылки из Kafka в Order', 'GET', '/api/v1/orders/' + files.v('orderId') + '/file-references', 'owner',
           tests=files.poll("data.items.some(f => f.fileId === pm.environment.get('$P_fileId'))", 'Событийная ссылка создана'))
+files.section('02 — Отдельно: права коллеги и чужой организации',
+              'Ответы GET здесь проверяют права доступа; повторное скачивание спецификации для демонстрации находится только в основном сценарии.')
 files.user('colleague', 'ORGANIZATION_REPRESENTATIVE', True)
 files.download(actor='colleague')
 files.add('Коллега не может удалить чужой файл → 404', 'DELETE', '/api/v1/files/' + files.v('fileId'), 'colleague', status=404)
 files.foreign()
 files.download(actor='foreign', status=404)
 files.download(actor='supervisor', status=403)
+files.section('03 — Отдельно: неверный MIME, сигнатура, ранний акт')
 files.upload('badMime', mime='application/octet-stream', status=415)
 files.upload('badSignature', fixture='demoInvalidPdf', status=422)
 files.upload('earlyAct', fixture='demoPdfAct', relation='DISCREPANCY_ACT', status=422)
+files.section('04 — Отдельно: логическое удаление временного файла',
+              'Создаётся и удаляется отдельный temporary. Основная спецификация остаётся ACTIVE.')
 files.upload('temporary')
 for title in ['Удалить только временный экземпляр', 'Повтор удаления — снова 204']:
     files.add(title, 'DELETE', '/api/v1/files/' + files.v('temporaryId'), 'owner', status=204)
 files.download('temporary', status=404)
+files.section('05 — Акт расхождения: READY → загрузка → скачивание',
+              'Акт — второй тип документа и самостоятельный пример. Его отдельный GET скачивает именно акт, а не спецификацию.')
 files.transition('start-cooking', 'IN_COOKING')
 files.transition('mark-ready', 'READY')
 files.upload('act', fixture='demoPdfAct', relation='DISCREPANCY_ACT')
 files.download('act')
 files.add('Дождаться двух активных ссылок и удаления временной', 'GET', '/api/v1/orders/' + files.v('orderId') + '/file-references', 'owner',
           tests=files.poll("data.items.some(f => f.fileId === pm.environment.get('$P_fileId')) && data.items.some(f => f.fileId === pm.environment.get('$P_actId')) && !data.items.some(f => f.fileId === pm.environment.get('$P_temporaryId'))", 'Order догнал file-events'))
-files.download()
 
 notifications = Folder('notify', '03 — Уведомления: Kafka → лента → прочитано → защита',
                        'Самостоятельный сценарий. Создаёт заказ и показывает уведомления кухни/представителя, чтение без дублей и запрет чужого ID. Для таблицы откройте Response → Visualize. Ожидание Kafka ограничено по времени.')
 notifications.setup()
 notifications.foreign()
+notifications.section('01 — Отправка заказа: уведомление кухни')
 notifications.prepared_order(False)
 notifications.notice('kitchen', 'ORDER_SUBMITTED')
+notifications.section('02 — Подтверждение: лента представителя и прочтение')
 notifications.transition('confirm', 'CONFIRMED')
 notifications.notice('owner', 'ORDER_CONFIRMED', True)
 notifications.add('Представитель — отметить уведомление прочитанным', 'POST', '/api/v1/notifications/' + notifications.v('noticeId') + '/read', 'owner', tests='''
@@ -363,13 +396,16 @@ pm.environment.set('$P_readAt', pm.response.json().readAt);
 notifications.add('Повтор прочтения — прежний readAt', 'POST', '/api/v1/notifications/' + notifications.v('noticeId') + '/read', 'owner', tests='''
 pm.test('Отметка идемпотентна', () => pm.expect(pm.response.json().readAt).to.eql(pm.environment.get('$P_readAt')));
 ''')
+notifications.section('03 — Отдельно: защита чужих уведомлений')
 notifications.add('Чужой пользователь не читает наш ID → 404', 'POST', '/api/v1/notifications/' + notifications.v('noticeId') + '/read', 'foreign', status=404)
 notifications.add('Чужая лента не содержит наш заказ', 'GET', '/api/v1/notifications?size=50', 'foreign', tests='''
 pm.test('Нет утечки чужой организации', () => pm.expect(pm.response.json().items.some(n => n.subjectId === pm.environment.get('$P_orderId'))).to.eql(false));
 ''')
+notifications.section('04 — Приготовление и выдача: новые уведомления')
 for action, status, event in [('start-cooking', 'IN_COOKING', 'COOKING_STARTED'), ('mark-ready', 'READY', 'ORDER_READY'), ('complete', 'COMPLETED', 'ORDER_COMPLETED')]:
     notifications.transition(action, status)
     notifications.notice('owner', event)
+notifications.section('05 — Итоговая лента: Visualize')
 notifications.add('Итоговая лента — открыть Visualize', 'GET', '/api/v1/notifications?size=50', 'owner', tests='''
 const own = pm.response.json().items.filter(n => n.subjectId === pm.environment.get('$P_orderId'));
 pm.test('Четыре типа уведомлений и одна отметка прочтения', () => {
@@ -382,6 +418,7 @@ runtime = Folder('runtime', '04 — Runtime: Git → Kafka refresh → лими�
                  'Источник значений — Git, Kafka передаёт refresh. Перед демонстрацией выполните python3 scripts/demo-runtime-config.py --max-bytes 2048 и задайте expectedFileMaxBytes=2048 в environment. Затем Run этой папки. Для восстановления helper --restore, expectedFileMaxBytes=10485760, Run снова. Без изменений Git папка также проходит повторно. localhost:18889/ не имеет главной страницы (404); верный health — /actuator/health. Текущая политика также видна в Swagger File → GET /api/v1/files/settings под SUPERVISOR.')
 runtime.setup()
 runtime.prepared_order()
+runtime.section('01 — До изменения: действующая политика и файл')
 runtime.add('Management health — правильный путь, не корень порта', 'GET', '/actuator/health', admin=True,
             tests="pm.test('UP', () => pm.expect(pm.response.json().status).to.eql('UP'));")
 runtime.add('SUPERVISOR — политика ДО refresh', 'GET', '/api/v1/files/settings', 'supervisor', tests='''
@@ -395,6 +432,8 @@ pm.test('Выбран ожидаемый лимит', () => {
 });
 ''')
 runtime.upload('existing')
+runtime.section('02 — Применить Git commit через Kafka',
+                'Значения редактируются в config-repo, в том числе через веб-редактор GitHub. Эта подпапка публикует refresh и проверяет применение. Нужны SUPERVISOR/CONFIG_ADMIN из подготовки и environment.')
 runtime.add('CONFIG_ADMIN — отправить refresh через Kafka', 'POST', '/actuator/busrefresh/file-service:**',
             body='', status=204, admin=True,
             description='POST с Content-Type: application/json. Меняет не Git, а публикует сигнал перечитать Git. Использует отдельный CONFIG_ADMIN, не JWT супервизора.')
@@ -410,6 +449,7 @@ if (ready) {
     pm.environment.set('$P_afterGeneration', data.generation);
 }
 ''')
+runtime.section('03 — После изменения: проверить реальное поведение')
 runtime.upload('large', fixture='demoPdfLarge', status=None, tests=f'''
 const expected = Number(pm.environment.get('expectedFileMaxBytes')) >= {len(LARGE)} ? 201 : 413;
 const errorHint = pm.response.code >= 400 ? JSON.stringify(pm.response.json()) : '';
@@ -417,7 +457,9 @@ pm.test('Большой PDF: ' + expected + ' при текущем лимите
 ''')
 runtime.upload('small')
 runtime.download('existing')
+runtime.section('04 — Отдельно: запрет для представителя')
 runtime.add('Представителю настройки недоступны → 403', 'GET', '/api/v1/files/settings', 'owner', status=403)
+runtime.section('05 — Итоговая политика')
 runtime.add('SUPERVISOR — итоговая политика', 'GET', '/api/v1/files/settings', 'supervisor', tests='''
 pm.test('Работает целевой лимит', () => pm.expect(pm.response.json().limits.maxBytes).to.eql(Number(pm.environment.get('expectedFileMaxBytes'))));
 ''')
@@ -426,7 +468,7 @@ folders = [business, files, notifications, runtime]
 collection = {
     'info': {'_postman_id': str(NAMESPACE), 'name': 'Lab4 — 4 повторяемых сценария',
              'schema': 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
-             'description': 'Импортировать этот JSON и lab4.local.postman_environment.json, выбрать environment. Run всей коллекции или одной папки, с первого запроса, 1+ iterations, delay 0. Каждая папка независима: собственные роли, уникальные имена, новые ID и версии. Токены подставляются автоматически. Все HTTP-запросы видимы, скрытых pm.sendRequest нет. Kafka-проверки повторяют только GET до pollTimeoutMs. PDF встроены, Working directory не нужен. Основная спецификация и акт остаются доступными для скачивания.\n\nRuntime: для видимого изменения сначала commit/push через scripts/demo-runtime-config.py, затем выставить expectedFileMaxBytes и запустить папку 04. После демонстрации --restore и повторный Run. Корень localhost:18889/ возвращает 404: это management API без UI. Swagger: http://localhost:18084/swagger-ui/index.html, File/settings под SUPERVISOR.\n\nСценарии создают тестовые данные и не удаляют прежние. Не экспортируйте заполненное environment с паролями и JWT. Генератор: scripts/build-postman.py; инструкция: postman/README.md.'},
+             'description': 'Импортировать этот JSON и lab4.local.postman_environment.json, выбрать environment. Run всей коллекции или одной из четырёх родительских папок, 1+ iterations, delay 100 ms. Внутри: подготовка, основной путь и отдельные случаи в подпапках. Для отдельной подпапки сначала выполнить подготовку и предыдущие шаги её основного сценария. Каждая родительская папка независима: собственные роли, уникальные имена, новые ID и версии. Токены подставляются автоматически. Все HTTP-запросы видимы, скрытых pm.sendRequest нет. Kafka-проверки повторяют только GET до pollTimeoutMs. PDF встроены, Working directory не нужен. Основная спецификация и акт остаются доступными для скачивания.\n\nRuntime: значения редактируются в GitHub config-repo или scripts/demo-runtime-config.py; затем expectedFileMaxBytes и подпапка «Применить Git commit через Kafka». При полном Run папки подготовка выполняется автоматически. После демонстрации --restore и повторный Run. Корень localhost:18889/ возвращает 404: это management API без UI. Swagger: http://localhost:18084/swagger-ui/index.html, File/settings под SUPERVISOR.\n\nСценарии создают тестовые данные и не удаляют прежние. Не экспортируйте заполненное environment с паролями и JWT. Генератор: scripts/build-postman.py; инструкция: postman/README.md.'},
     'auth': {'type': 'noauth'}, 'item': [f.node for f in folders],
     'variable': [{'key': key, 'value': value, 'type': 'string'} for key, value in [
         ('demoPdfSmall', SMALL), ('demoPdfAct', ACT), ('demoPdfLarge', LARGE), ('demoInvalidPdf', 'This is not a PDF.\n')]],
@@ -451,4 +493,4 @@ for filename, data in [('lab4.postman_collection.json', collection), ('lab4.post
 (POSTMAN / 'fixtures').mkdir(exist_ok=True)
 for name, content in [('specification.pdf', SMALL), ('discrepancy-act.pdf', ACT), ('large-specification.pdf', LARGE)]:
     (POSTMAN / 'fixtures' / name).write_bytes(content.encode('ascii'))
-print('Built ' + str(sum(len(f.node['item']) for f in folders)) + ' visible requests in 4 independent folders')
+print('Built ' + str(sum(f.request_count for f in folders)) + ' visible requests in 4 independent folders with subsections')

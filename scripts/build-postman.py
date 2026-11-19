@@ -147,6 +147,12 @@ class Folder:
                  {'name': 'Postman ' + self.v('runId')}, 201, self.save('categoryId'))
         self.add('KITCHEN_MANAGER — блюдо за 250', 'POST', '/api/v1/dishes', 'kitchen',
                  self.dish_body(250), 201, self.save('dishId'))
+        if self.prefix == 'files':
+            for key, name, price in [('soup', 'Борщ со сметаной', 160), ('drink', 'Компот из сухофруктов', 90)]:
+                dish = self.dish_body(price)
+                dish['name'] = name
+                self.add('KITCHEN_MANAGER — ' + name, 'POST', '/api/v1/dishes', 'kitchen',
+                         dish, 201, self.save(key + 'Id'))
 
     def dish_body(self, price):
         return {'name': 'Куриное филе с гречкой', 'description': 'Постоянное меню',
@@ -172,10 +178,17 @@ class Folder:
                  201, self.order_checks(key, 'DRAFT'))
 
     def order_lines(self, key='order'):
+        items = [{'dishId': self.v('dishId'), 'quantity': 2}]
+        if self.prefix == 'files':
+            items += [{'dishId': self.v('soupId'), 'quantity': 1}, {'dishId': self.v('drinkId'), 'quantity': 2}]
         self.add('Представитель — позиции заказа (' + key + ')', 'PUT', '/api/v1/orders/' + self.v(key + 'Id') + '/lines',
-                 'owner', {'expectedVersion': self.v(key + 'Version'), 'lines': [{'dishId': self.v('dishId'), 'quantity': 2}]},
+                 'owner', {'expectedVersion': self.v(key + 'Version'), 'lines': items},
                  tests=self.order_checks(key, 'DRAFT') + '''
-                 pm.test('Сумма 500', () => pm.expect(Number(data.totalAmount)).to.eql(500));
+                 pm.test('Все запрошенные позиции сохранены', () => {
+                     const sent = JSON.parse(pm.variables.replaceIn(pm.request.body.raw));
+                     pm.expect(data.lines.length).to.eql(sent.lines.length);
+                     sent.lines.forEach(line => pm.expect(data.lines.some(saved => saved.dishId === line.dishId && saved.quantity === line.quantity)).to.eql(true));
+                 });
                  ''')
 
     def transition(self, action, status, actor='kitchen', key='order', reason=None):
@@ -217,9 +230,17 @@ class Folder:
         self.add(actor.upper() + ' — дождаться ' + event, 'GET', '/api/v1/notifications?size=50', actor,
                  tests=tests + visualizer(event), description='В Runner запрос повторяется до появления события, максимум pollTimeoutMs. При ручном Send повторите запрос, если событие ещё в пути. Visualize показывает ленту.')
 
-    def upload(self, key='file', fixture=None, relation='SPECIFICATION', status=201, mime='application/pdf', tests=''):
+    def upload(self, key='file', fixture=None, relation='SPECIFICATION', status=201, mime='application/pdf', tests='', batch=False):
         fixture = fixture or ('demoPdfSmall' if self.prefix == 'runtime' else 'demoPdfSpecification')
-        pre = PDF_RENDERER + r"""
+        batch_pre = '''
+        const target = Number(pm.environment.get('filesSpecificationCount') || 3);
+        if (!Number.isInteger(target) || target < 1) throw new Error('filesSpecificationCount должен быть целым числом от 1.');
+        if (Number(pm.environment.get('$P_batchUploaded') || 0) >= target - 1) {
+            pm.execution.skipRequest();
+            return;
+        }
+        ''' if batch else ''
+        pre = batch_pre + PDF_RENDERER + r"""
         const boundary = 'postman-' + pm.variables.replaceIn('{{$guid}}');
         const assets = JSON.parse(pm.collectionVariables.get('demoPdfAssets'));
         let asset = assets['@FIXTURE@'];
@@ -228,20 +249,32 @@ class Folder:
             order: JSON.parse(pm.environment.get('$P_orderData')),
             organization: {name: pm.environment.get('$P_organization')},
             point: JSON.parse(pm.environment.get('$P_pointData')),
-            acceptedQuantity: '@RELATION@' === 'DISCREPANCY_ACT' ? Number(pm.environment.get('$P_receivedQuantity') || 1) : undefined
+            acceptedQuantity: '@RELATION@' === 'DISCREPANCY_ACT' ? Number(pm.environment.get('$P_receivedQuantity') || 1) : undefined,
+            receivedQuantities: JSON.parse(pm.environment.get('$P_receivedQuantities') || '{}'),
+            copy: @COPY@
         };
         const content = '@FIXTURE@' === 'demoInvalidPdf' ? 'This is not a PDF.' : renderOrderPdf(asset, context);
         pm.environment.set('$P_@KEY@Bytes', content.length);
         pm.environment.set('$P_@KEY@ExpectedChecksum', require('crypto-js').SHA256(content).toString());
         const order = pm.environment.get('$P_orderId');
-        const filename = ('@RELATION@' === 'DISCREPANCY_ACT' ? 'discrepancy-act-' : 'specification-') + order.slice(0,8) + '.pdf';
+        const filename = ('@RELATION@' === 'DISCREPANCY_ACT' ? 'discrepancy-act-' : 'specification-') + order.slice(0,8) + (context.copy > 1 ? '-' + context.copy : '') + '.pdf';
         const body = '--' + boundary + '\r\nContent-Disposition: form-data; name="orderId"\r\n\r\n' + order + '\r\n'
             + '--' + boundary + '\r\nContent-Disposition: form-data; name="relationType"\r\n\r\n@RELATION@\r\n'
             + '--' + boundary + '\r\nContent-Disposition: form-data; name="file"; filename="' + filename + '"\r\nContent-Type: @MIME@\r\n\r\n'
             + content + '\r\n--' + boundary + '--\r\n';
         pm.variables.set('multipartBody', body);
         pm.request.headers.upsert({key:'Content-Type',value:'multipart/form-data; boundary=' + boundary});
-        """.replace('@FIXTURE@', fixture).replace('@KEY@', key).replace('@RELATION@', relation).replace('@MIME@', mime)
+        """.replace('@FIXTURE@', fixture).replace('@KEY@', key).replace('@RELATION@', relation).replace('@MIME@', mime).replace('@COPY@', "Number(pm.environment.get('$P_batchUploaded') || 0) + 2" if batch else '1')
+        if batch:
+            tests += '''
+            if (pm.response.code === 201) {
+                const ids = JSON.parse(pm.environment.get('$P_extraFileIds') || '[]');
+                ids.push(pm.response.json().id);
+                pm.environment.set('$P_extraFileIds', JSON.stringify(ids));
+                pm.environment.set('$P_batchUploaded', ids.length);
+                if (ids.length < Number(pm.environment.get('filesSpecificationCount') || 3) - 1) pm.execution.setNextRequest(pm.info.requestId);
+            }
+            '''
         if status == 201:
             tests = self.save(key + 'Id') + '\n' + self.save(key + 'Checksum', 'checksum') + '''
             pm.test('Только метаданные, без storageKey', () => {
@@ -332,6 +365,9 @@ files.setup()
 files.prepared_order()
 files.section('01 — Спецификация: загрузить, скачать, проверить связь',
               'Основной сценарий для показа. Один активный PDF: загрузка, скачивание, метаданные и событийная ссылка. Этот GET можно открыть после всего прогона и сохранить PDF.')
+files.add('Представитель — получить все позиции перед PDF', 'GET', '/api/v1/orders/' + files.v('orderId'), 'owner',
+          tests=files.order_checks('order', 'CONFIRMED'),
+          description='Обновляет данные для PDF после ручного изменения сценария. В документ попадут все сохранённые блюда заказа.')
 files.upload()
 files.download()
 files.add('Метаданные файла в заказе', 'GET', '/api/v1/orders/' + files.v('orderId') + '/files', 'owner', tests='''
@@ -357,14 +393,40 @@ files.upload('temporary')
 for title in ['Удалить только временный экземпляр', 'Повтор удаления — снова 204']:
     files.add(title, 'DELETE', '/api/v1/files/' + files.v('temporaryId'), 'owner', status=204)
 files.download('temporary', status=404)
-files.section('05 — Акт расхождения: READY → загрузка → скачивание',
+files.section('05 — Несколько спецификаций одного заказа',
+              'filesSpecificationCount — общее число спецификаций, по умолчанию 3. Один видимый POST повторяется Runner, пока не загрузит дополнительные документы. Основная спецификация сохраняет свой fileId.')
+files.upload('additional', batch=True)
+files.section('06 — Акт расхождения: READY → загрузка → скачивание',
               'Акт — второй тип документа и самостоятельный пример. Его отдельный GET скачивает именно акт, а не спецификацию.')
 files.transition('start-cooking', 'IN_COOKING')
 files.transition('mark-ready', 'READY')
 files.upload('act', fixture='demoPdfAct', relation='DISCREPANCY_ACT')
 files.download('act')
-files.add('Дождаться двух активных ссылок и удаления временной', 'GET', '/api/v1/orders/' + files.v('orderId') + '/file-references', 'owner',
-          tests=files.poll("data.items.some(f => f.fileId === pm.environment.get('$P_fileId')) && data.items.some(f => f.fileId === pm.environment.get('$P_actId')) && !data.items.some(f => f.fileId === pm.environment.get('$P_temporaryId'))", 'Order догнал file-events'))
+files.add('Дождаться всех активных ссылок / пагинация по 50', 'GET', '/api/v1/orders/' + files.v('orderId') + '/file-references?size=50&page=' + files.v('linksPage'), 'owner',
+          pre="if (!pm.environment.get('$P_linksPage')) pm.environment.set('$P_linksPage', '0');", tests='''
+const data = pm.response.json();
+const ids = JSON.parse(pm.environment.get('$P_linkIds') || '[]').concat(data.items.map(file => file.fileId));
+const expected = [pm.environment.get('$P_fileId'), pm.environment.get('$P_actId')]
+    .concat(JSON.parse(pm.environment.get('$P_extraFileIds') || '[]'));
+const start = Number(pm.environment.get('$P_linksStarted') || Date.now());
+pm.environment.set('$P_linksStarted', String(start));
+if (data.hasNext) {
+    pm.environment.set('$P_linkIds', JSON.stringify(ids));
+    pm.environment.set('$P_linksPage', String(Number(pm.environment.get('$P_linksPage')) + 1));
+    pm.execution.setNextRequest(pm.info.requestId);
+} else {
+    const ready = expected.every(id => ids.includes(id)) && !ids.includes(pm.environment.get('$P_temporaryId'));
+    pm.environment.set('$P_linksPage', '0');
+    pm.environment.set('$P_linkIds', '[]');
+    if (!ready && Date.now() - start < Number(pm.environment.get('pollTimeoutMs') || 60000)) {
+        pm.execution.setNextRequest(pm.info.requestId);
+        setTimeout(() => {}, Number(pm.environment.get('pollIntervalMs') || 500));
+    } else {
+        pm.test('Все документы связаны с заказом; временный удалён', () => pm.expect(ready).to.eql(true));
+        pm.environment.set('$P_linksStarted', '');
+    }
+}
+''')
 
 notifications = Folder('notify', '03 — Уведомления: Kafka → лента → прочитано → защита',
                        'Самостоятельный сценарий. Создаёт заказ и показывает уведомления кухни/представителя, чтение без дублей и запрет чужого ID. Для таблицы откройте Response → Visualize. Ожидание Kafka ограничено по времени.')
@@ -465,6 +527,7 @@ values = [
     ('supervisorLogin', 'supervisor', 'default'), ('supervisorPassword', '', 'secret'),
     ('configAdminLogin', 'config-admin', 'default'), ('configAdminPassword', '', 'secret'),
     ('expectedFileMaxBytes', '10485760', 'default'), ('pollTimeoutMs', '60000', 'default'),
+    ('filesSpecificationCount', '3', 'default'),
     ('pollIntervalMs', '500', 'default'),
 ]
 for folder in folders:

@@ -83,38 +83,39 @@ def template(kind):
         cells = [('DISH', 54, 245), ('QUANTITY', 335, 50), ('ACCEPTED', 416, 50), ('DIFFERENCE', 499, 45)]
     for x, value in headers:
         text(x, 454, value, 8, True)
-    for key, x, width in cells:
-        field(key, x, 420, width, 9)
-    rule(402)
+    field('TABLE', 54, 425, 507, 9)
+    rule(264)
     if kind == 'specification':
-        text(355, 370, 'ИТОГО К ВЫДАЧЕ', 9, True, GREY)
-        field('TOTAL', 355, 343, 196, 20)
-        text(44, 296, 'Комментарий к заказу', 9, True, GREY)
-        field('COMMENT', 44, 277, 507, 9)
-        text(44, 228, 'Заказ подтверждён кухней. Состав и цена зафиксированы.', 10)
-        text(44, 210, 'Изменения согласовываются до начала приготовления.', 9, color=GREY)
+        field('TOTAL_LABEL', 355, 240, 196, 9)
+        field('TOTAL', 355, 214, 196, 20)
+        text(44, 184, 'Комментарий к заказу', 9, True, GREY)
+        field('COMMENT', 44, 167, 507, 9)
+        field('CONTINUATION', 44, 141, 507, 9)
     else:
-        text(44, 371, 'Основание / замечания', 9, True, GREY)
-        field('REMARK', 44, 350, 507, 10)
-        text(44, 302, 'Подписи подтверждают зафиксированные сведения о приемке.', 9, color=GREY)
-        text(44, 283, 'Состав заказа и его стоимость приведены в спецификации.', 9, color=GREY)
-    rule(174)
-    text(44, 150, 'От производственной кухни', 9, True)
-    text(330, 150, 'От заказчика', 9, True)
-    c.line(44, 113, 265, 113)
-    c.line(330, 113, 551, 113)
-    text(44, 98, 'подпись / Ф.И.О.', 8, color=GREY)
-    text(330, 98, 'подпись / Ф.И.О.', 8, color=GREY)
-    field('ORDER_ID', 44, 53, 507, 8)
-    text(44, 36, 'Документ к заказу корпоративного питания', 8, color=GREY)
-    text(519, 36, '1 / 1', 8, color=GREY)
+        text(44, 240, 'Основание / замечания', 9, True, GREY)
+        field('REMARK', 44, 219, 507, 9)
+        text(44, 184, 'Подписи подтверждают сведения о приемке на данном листе.', 9, color=GREY)
+        text(44, 167, 'Состав и стоимость заказа приведены в спецификации.', 9, color=GREY)
+        field('CONTINUATION', 44, 141, 507, 9)
+    rule(124)
+    text(44, 105, 'От производственной кухни', 9, True)
+    text(330, 105, 'От заказчика', 9, True)
+    c.line(44, 77, 265, 77)
+    c.line(330, 77, 551, 77)
+    text(44, 62, 'подпись / Ф.И.О.', 8, color=GREY)
+    text(330, 62, 'подпись / Ф.И.О.', 8, color=GREY)
+    field('ORDER_ID', 44, 34, 507, 8)
+    text(44, 17, 'Документ к заказу корпоративного питания', 8, color=GREY)
+    field('PAGE', 500, 17, 51, 8)
     c.showPage()
     c.save()
     reader = PdfReader(io.BytesIO(buffer.getvalue()))
     glyphs = {}
-    for font in reader.pages[0]['/Resources']['/Font'].values():
+    resource = None
+    for name, font in reader.pages[0]['/Resources']['/Font'].items():
         font = font.get_object()
         if str(font.get('/BaseFont', '')).endswith('ArialMT'):
+            resource = str(name)
             cmap = font['/ToUnicode'].get_data().decode('ascii')
             for block in re.findall(r'beginbfchar(.*?)endbfchar', cmap, flags=re.S):
                 for code, unicode in re.findall(r'<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>', block):
@@ -126,7 +127,7 @@ def template(kind):
         if not isinstance(obj, StreamObject):
             continue
         if b'FIELD_' in obj.get_data():
-            obj._data = obj.get_data()
+            obj._data = re.sub(rb'BT[^\n]*\(FIELD_TABLE\)[^\n]*ET', b'%TABLE_ROWS%', obj.get_data())
             for key in ('/Filter', '/DecodeParms'):
                 if key in obj:
                     del obj[key]
@@ -142,7 +143,12 @@ def template(kind):
     data = output.getvalue().replace(b'%\xe2\xe3\xcf\xd3', b'%PDF!')
     data.decode('ascii')
     widths = {char: pdfmetrics.stringWidth(char, 'Document', 1000) for char in glyphs}
-    return {'kind': kind, 'template': data.decode('ascii'), 'glyphs': glyphs, 'widths': widths, 'fields': fields}
+    page = writer.pages[0]
+    return {'kind': kind, 'template': data.decode('ascii'), 'glyphs': glyphs, 'widths': widths, 'fields': fields,
+            'pageObject': page.indirect_reference.idnum, 'contentObject': page.raw_get('/Contents').idnum,
+            'pagesObject': page.raw_get('/Parent').idnum,
+            'table': {'font': resource, 'size': 9, 'top': 425, 'bottom': 280, 'lineHeight': 12,
+                      'columns': [{'key': key, 'x': x, 'width': width} for key, x, width in cells]}}
 
 
 def compact():
@@ -150,9 +156,9 @@ def compact():
                'BT /F1 18 Tf 42 752 Td (ORDER SUMMARY) Tj ET\n')
     for y, key, label in [(696, 'NUMBER', 'Document: '), (672, 'ORGANIZATION', 'Customer: '),
                           (648, 'DELIVERY', 'Delivery: '), (620, 'ORDER_ID', ''),
-                          (570, 'DISH', 'Meal: '), (540, 'QUANTITY', 'Quantity: '),
-                          (510, 'PRICE', 'Unit price, RUB: '), (470, 'TOTAL', 'TOTAL: ')]:
+                          (150, 'TOTAL_LABEL', ''), (125, 'TOTAL', ''), (40, 'PAGE', '')]:
         content += f'BT /F1 11 Tf 42 {y} Td ({label}FIELD_{key}) Tj ET\n'
+    content += 'BT /F1 9 Tf 42 595 Td (Meal / Quantity / Unit price / Amount, RUB) Tj ET\n%TABLE_ROWS%\n'
     objects = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
                '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
                '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
@@ -166,7 +172,11 @@ def compact():
     data += 'xref\n0 6\n0000000000 65535 f \n'
     data += ''.join(f'{v:010} 00000 n \n' for v in offsets[1:])
     data += f'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{start}\n%%EOF\n'
-    return {'kind': 'compact', 'template': data, 'glyphs': {}, 'widths': {}, 'fields': {}}
+    return {'kind': 'compact', 'template': data, 'glyphs': {}, 'widths': {}, 'fields': {},
+            'pageObject': 3, 'contentObject': 5, 'pagesObject': 2,
+            'table': {'font': '/F1', 'size': 9, 'top': 570, 'bottom': 190, 'lineHeight': 12,
+                      'columns': [{'key': key, 'x': x, 'width': width} for key, x, width in
+                                  [('DISH', 42, 270), ('QUANTITY', 338, 44), ('PRICE', 400, 70), ('AMOUNT', 480, 70)]]}}
 
 
 assets = {'demoPdfSpecification': template('specification'), 'demoPdfAct': template('act'), 'demoPdfSmall': compact()}

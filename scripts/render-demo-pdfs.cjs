@@ -17,8 +17,12 @@ const context = {
     order: {
         id: '456d124a-7380-4b97-8fc0-39498e2f5462',
         createdAt: '2026-11-20T08:30:00Z', requestedDeliveryAt: '2026-11-27T09:00:00Z',
-        comment: 'Комплексный обед. Приборы и упаковка включены.', totalAmount: 500,
-        lines: [{dishNameSnapshot: 'Куриное филе с гречкой', quantity: 2, unitPriceSnapshot: 250, lineAmount: 500}]
+        comment: 'Комплексный обед. Приборы и упаковка включены.', totalAmount: 840,
+        lines: [
+            {dishNameSnapshot: 'Куриное филе с гречкой', quantity: 2, unitPriceSnapshot: 250, lineAmount: 500},
+            {dishNameSnapshot: 'Борщ со сметаной', quantity: 1, unitPriceSnapshot: 160, lineAmount: 160},
+            {dishNameSnapshot: 'Компот из сухофруктов', quantity: 2, unitPriceSnapshot: 90, lineAmount: 180}
+        ]
     },
     acceptedQuantity: 1
 };

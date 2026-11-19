@@ -452,4 +452,3 @@ for filename, data in [('lab4.postman_collection.json', collection), ('lab4.post
 for name, content in [('specification.pdf', SMALL), ('discrepancy-act.pdf', ACT), ('large-specification.pdf', LARGE)]:
     (POSTMAN / 'fixtures' / name).write_bytes(content.encode('ascii'))
 print('Built ' + str(sum(len(f.node['item']) for f in folders)) + ' visible requests in 4 independent folders')
-

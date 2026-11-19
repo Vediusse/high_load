@@ -14,3 +14,9 @@ catering:
 logging:
   level:
     org.apache.kafka: WARN
+
+---
+spring:
+  cloud:
+    bus:
+      enabled: false

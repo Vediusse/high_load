@@ -74,3 +74,9 @@ spring:
 identity:
   notifications:
     secret: test-notification-service-credential-42
+
+---
+spring:
+  cloud:
+    bus:
+      enabled: false

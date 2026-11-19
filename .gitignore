@@ -30,3 +30,4 @@ backups/
 # Private local launch and credentials
 /compose.override.yaml
 /CREDENTIALS.local.md
+/ADMIN-ACCESS.local.md

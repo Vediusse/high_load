@@ -28,7 +28,7 @@ public final class JdbcFiles implements FileRecords {
         tx.setTimeout(10);
     }
 
-    private static final RowMapper<FileDocument> ROW =
+    static final RowMapper<FileDocument> FILE_ROW =
             (rs, n) ->
                     new FileDocument(
                             rs.getObject("id", UUID.class),
@@ -45,14 +45,15 @@ public final class JdbcFiles implements FileRecords {
                             rs.getLong("version"));
 
     public Optional<FileDocument> find(UUID id) {
-        return jdbc.query("select * from file_document where id=?", ROW, id).stream().findFirst();
+        return jdbc.query("select * from file_document where id=?", FILE_ROW, id).stream()
+                .findFirst();
     }
 
     public PageResult<FileDocument> list(UUID orderId, PageQuery page) {
         var rows =
                 jdbc.query(
                         "select * from file_document where order_id=? and status='ACTIVE' order by uploaded_at desc,id desc limit ? offset ?",
-                        ROW,
+                        FILE_ROW,
                         orderId,
                         page.size() + 1,
                         page.offset());

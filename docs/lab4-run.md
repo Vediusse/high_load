@@ -4,6 +4,7 @@
 
 ```bash
 python3 scripts/setup-env.py
+python3 scripts/write-admin-access.py
 docker compose up -d --build --wait --wait-timeout 600
 ```
 
@@ -25,7 +26,7 @@ git clone --branch lab4 https://github.com/Vediusse/high_load_configs.git ../hig
 docker compose -f compose.yaml -f compose.local-config.yaml up -d --build --wait --wait-timeout 600
 ```
 
-Для обычной команды `docker compose up` можно создать локальную ссылку `compose.override.yaml` на `compose.local-config.yaml`; этот файл игнорируется Git. Host-копия монтируется read-only. Config Server делает временную Git-копию без origin, чтобы локальный backend не пытался выполнять SSH fetch. После изменения настроек сначала нужен commit в config-repo, затем пересоздание Config Server и затронутых приложений.
+Для обычной команды `docker compose up` можно создать локальную ссылку `compose.override.yaml` на `compose.local-config.yaml`; этот файл игнорируется Git. Host-копия монтируется read-only. Config Server делает временную Git-копию без origin, чтобы локальный backend не пытался выполнять SSH fetch. После изменения настроек нужен commit в config-repo и пересоздание Config Server, чтобы обновить временную копию; runtime-политику File затем обновляет `scripts/refresh-config.py`. В обычном режиме HTTPS GitHub пересоздавать Config Server не нужно.
 
 ## Автотесты
 
@@ -33,7 +34,7 @@ docker compose -f compose.yaml -f compose.local-config.yaml up -d --build --wait
 DOCKER_AUTH_CONFIG='{"auths":{}}' JAVA_HOME=$(/usr/libexec/java_home -v 21) ./mvnw clean verify
 ```
 
-Весь reactor включает unit, `*IT`, PostgreSQL/Testcontainers, настоящий трёхброкерный Kafka-кластер, проверку полного перезапуска/отказа брокера, ArchUnit и JaCoCo ≥70%. На Linux с Java 21 достаточно `./mvnw clean verify`.
+Весь reactor включает unit, `*IT`, PostgreSQL/Testcontainers, настоящий S3 Silo и трёхброкерный Kafka-кластер, проверку полного перезапуска/отказа брокера, ArchUnit и JaCoCo ≥70%. На Linux с Java 21 достаточно `./mvnw clean verify`.
 
 ## Сценарии текущего Compose
 
@@ -53,7 +54,7 @@ docker compose exec kafka-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server ka
 docker compose exec kafka-1 /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka-1:9092 --describe --group notification-v1
 ```
 
-Основные топики: `order-events`, `production-events`, `file-events`; каждый — 3 partition, RF=3, min ISR=2. DLT имеют суффикс `.DLT` и такую же репликацию. Groups: `notification-v1`, `kitchen-projection-v1`, `order-file-references-v1`.
+Основные топики: `order-events`, `production-events`, `file-events`; каждый — 3 partition, RF=3, min ISR=2. DLT имеют суффикс `.DLT` и такую же репликацию. `runtime-config-events` с теми же параметрами используется Spring Cloud Bus. Groups: `notification-v1`, `kitchen-projection-v1`, `order-file-references-v1`; Bus использует отдельную подписку каждого экземпляра.
 
 Compose передаёт приложениям и брокерам `infra/jvm/network.security` через `java.security.properties`. DNS-кэш JVM отключён: при перезапуске Docker может назначить прежний IP другому broker ID, поэтому новое соединение должно заново разрешить имя сервиса. Файл дополняет стандартные security properties JDK. Основание: [настройка security properties Java 21](https://docs.oracle.com/en/java/javase/21/security/security-properties-file.html) и [DNS-поведение Kafka client](https://kafka.apache.org/39/generated/consumer_config.html).
 
@@ -116,5 +117,8 @@ python3 scripts/lab4-outbox-smoke.py --env-file .env --base-url http://localhost
 ```
 
 ## Сохранение данных
+
+Файлы: PostgreSQL хранит метаданные, локальный S3 — содержимое. Консоль, доступы,
+SQL и сценарий изменения runtime-настроек: [docs/lab4-s3-runtime.md](lab4-s3-runtime.md).
 
 `docker compose stop` и `docker compose down` сохраняют именованные volumes. Не использовать `down -v` для рабочего окружения: этот вариант удаляет базы, Kafka и файлы. Чистые проверочные окружения создаются с отдельными project name, портом и секретами.

@@ -153,3 +153,9 @@ catering:
 spring:
   jpa:
     mapping-resources: META-INF/kitchen-domain.hbm.xml
+
+---
+spring:
+  cloud:
+    bus:
+      enabled: false

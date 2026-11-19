@@ -9,6 +9,10 @@
     <artifactId>identity-service</artifactId>
     <dependencies>
         <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-bus-kafka</artifactId>
+        </dependency>
+        <dependency>
             <groupId>ru.itmo.highload</groupId>
             <artifactId>common</artifactId>
             <version>${project.version}</version>

@@ -4,3 +4,9 @@ spring:
   cloud:
     config:
       enabled: false
+
+---
+spring:
+  cloud:
+    bus:
+      enabled: false

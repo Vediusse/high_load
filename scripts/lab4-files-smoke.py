@@ -141,14 +141,24 @@ assert len(api('GET', '/orders/' + order['id'] + '/files', own)['items']) == 1
 print('PASS: disallowed MIME, signature mismatch, oversized payload and premature discrepancy act rejected')
 
 key = str(uuid.UUID(db('file', "select storage_key from file_document where id='" + file['id'] + "'")))
-path = '/var/lib/catering-files/' + key
+object_path = 'local/' + env.get('S3_BUCKET', 'order-files') + '/documents/' + key
+
+
+def replace_object(content):
+    result = subprocess.run(['docker', 'exec', '-i', project + '-s3-storage-1',
+        'mcli', '--config-dir', '/tmp/health', 'pipe', object_path], input=content,
+        capture_output=True, env=env)
+    if result.returncode:
+        raise RuntimeError('Local S3 test write failed')
+
+
 corrupted = pdf[:-1] + bytes([pdf[-1] ^ 1])
 try:
-    docker('exec', '-i', project + '-file-service-1', 'sh', '-c', 'cat > "$1"', 'sh', path, input=corrupted.decode())
+    replace_object(corrupted)
     _, raw = request('GET', '/files/' + file['id'], own, expected=500)
     assert json.loads(raw)['code'] == 'FILE_INTEGRITY_ERROR'
 finally:
-    docker('exec', '-i', project + '-file-service-1', 'sh', '-c', 'cat > "$1"', 'sh', path, input=pdf.decode())
+    replace_object(pdf)
 assert request('GET', '/files/' + file['id'], own)[1] == pdf
 print('PASS: same-size corruption is detected; original binary restored')
 
@@ -158,7 +168,7 @@ act = upload(relation='DISCREPANCY_ACT')
 for _ in range(2):
     api('DELETE', '/files/' + file['id'], own, expected=204)
 request('GET', '/files/' + file['id'], own, expected=404)
-docker('exec', project + '-file-service-1', 'test', '-f', path)
+docker('exec', project + '-s3-storage-1', 'mcli', '--config-dir', '/tmp/health', 'stat', object_path)
 until(lambda: [item['fileId'] for item in api('GET', '/orders/' + order['id'] + '/file-references', own)['items']] == [act['id']], 'deleted reference disappears')
 assert [item['id'] for item in api('GET', '/orders/' + order['id'] + '/files', own)['items']] == [act['id']]
 

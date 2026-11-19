@@ -10,24 +10,24 @@ import ru.itmo.highload.common.domain.events.EventEnvelope;
 import ru.itmo.highload.common.domain.events.EventType;
 import ru.itmo.highload.common.dto.out.PageResponse;
 import ru.itmo.highload.files.application.ports.BinaryStorage;
+import ru.itmo.highload.files.application.ports.FilePolicy;
 import ru.itmo.highload.files.application.ports.FileRecords;
 import ru.itmo.highload.files.application.ports.OrderAccess;
 import ru.itmo.highload.files.domain.FileContent;
 import ru.itmo.highload.files.domain.FileDocument;
-import ru.itmo.highload.files.domain.FileLimits;
 
 @RequiredArgsConstructor
 public class FileService {
     private final FileRecords records;
     private final BinaryStorage storage;
     private final OrderAccess orders;
-    private final FileLimits limits;
+    private final FilePolicy policy;
 
     public FileView upload(UploadFileCommand command, FileActor actor) {
         FileDocument.validateName(command.originalName());
         var order = orders.require(command.orderId(), actor.bearer());
         command.relationType().requireUploadStatus(order.status());
-        var content = FileContent.inspect(command.content(), command.mimeType(), limits);
+        var content = FileContent.inspect(command.content(), command.mimeType(), policy.current());
         var file =
                 new FileDocument(
                         UUID.randomUUID(),

@@ -10,7 +10,8 @@ Order: организации/точки/заказы/строки/снимки/
 PostgreSQL и JPA. Kitchen: рабочая проекция и production outbox, отдельная PG/JPA.
 Identity: пользователи/роли/BCrypt/текущая организация и версии токенов, PG/JPA.
 Notification: уведомления и inbox, отдельная PG/JDBC.
-File: метаданные и outbox в PG/JDBC, бинарные данные в отдельном Docker volume.
+File: метаданные и outbox в PG/JDBC, бинарные данные в локальном S3 Silo.
+Silo хранит объекты в отдельном s3-data Docker volume, доступ через AWS SDK S3Client.
 Gateway, Config, Discovery — инфраструктурные приложения; common — библиотека.
 
 Синхронный граф
@@ -53,7 +54,7 @@ JPA persistence metadata вынесена в META-INF/*-domain.hbm.xml. Catalog 
 BlockingRequests. Бизнес-сервисы не зависят от JAR друг друга.
 
 Файлы
-Уникальный storage UUID, atomic rename, проверка MIME/signature/size и SHA256.
+Уникальный storage UUID, условный S3 PutObject, проверка MIME/signature/size и SHA256.
 Order хранит fileId/type/version/deleted, File владеет метаданными и содержимым.
 Download: текущий доступ к заказу + checksum. Delete: владелец + текущий доступ;
 логическое удаление, bytes retained. Metadata/outbox rollback очищает доказанный
@@ -63,9 +64,22 @@ Download: текущий доступ к заказу + checksum. Delete: вла
 Конфигурация и вход
 Config Server читает отдельный Git repo high_load_configs, ветка lab4. Shared
 application.yml плюс <service>/application.yml; секреты приходят только из env.
-Gateway — единственный опубликованный HTTP-порт. Внутренние пути не маршрутизируются
+Gateway — вход бизнес-API. S3 API/Console и Config management опубликованы только
+на localhost для оператора. Внутренние бизнес-пути не маршрутизируются
 наружу. Swagger открыт, бизнес API защищён ролями, пользователем и организацией.
 Точные операции, env, команды и ограничения: README.md и docs/lab4-run.md.
+
+Runtime: Config Server публикует Spring Cloud Bus refresh в runtime-config-events
+(3 partitions/RF3/minISR2). Все девять приложений слушают шину; получатель перечитывает
+Git. FilePolicy атомарно применяет проверенные max-bytes/allowed-mime-types;
+невалидный набор сохраняет последнюю рабочую политику. S3 endpoint/ключи/bucket и
+жёсткий предел 10 MiB задаются при старте. Значения/секреты через Kafka не передаются.
+POST busrefresh требует отдельного CONFIG_ADMIN; busenv запрещён. GET files/settings
+показывает только действующую политику и generation супервизору через Gateway.
+Подробности и демонстрация: docs/lab4-s3-runtime.md.
+Kafka Binder шины явно использует ByteArraySerializer/Deserializer; бизнес-каналы
+сохраняют StringSerializer/Deserializer. Подтверждения Bus не наследуют настройки
+сериализации outbox.
 
 
 Проверка архитектуры и читаемости 2026-11-18
@@ -74,7 +88,7 @@ Clean Architecture определяется зависимостями, а не 
 Domain содержит инварианты CorporateOrder/Dish/Organization, policy файлов и
 модели событий. Application координирует сценарии и вызывает свои порты.
 HTTP/JWT/multipart и Kafka listener находятся в adapters/in. Spring Data,
-JDBC, Feign, подпись JWT и filesystem — adapters/out. Configuration собирает
+JDBC, Feign, подпись JWT и S3 — adapters/out. Configuration собирает
 реализации и границы транзакций. Подпись токенов Identity доступна REST через
 InternalTokens; прямой импорт реализации REST-адаптером удалён.
 
@@ -104,7 +118,7 @@ SQL для outbox/inbox и защиты порядка не заменяется
 
 Это проверенный учебный стенд. Лабораторная не включает TLS/ACL Kafka,
 централизованный secret manager, off-host backup/restore, дежурство и нагрузочные
-SLO. Три combined KRaft broker/controller и файловый Docker volume достаточны для
+SLO. Три combined KRaft broker/controller и один локальный S3-узел достаточны для
 проверки задания, но не являются планом эксплуатации кластера в production.
 Репликация не заменяет резервное копирование; DLT требует операционного разбора.
 

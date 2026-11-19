@@ -24,3 +24,9 @@ catering:
     thread-name-prefix: file-test
 files:
   max-bytes: 1024
+
+---
+spring:
+  cloud:
+    bus:
+      enabled: false

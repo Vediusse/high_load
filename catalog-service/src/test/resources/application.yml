@@ -20,3 +20,9 @@ catering:
   security:
     internal:
       enabled: true
+
+---
+spring:
+  cloud:
+    bus:
+      enabled: false

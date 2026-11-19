@@ -53,7 +53,7 @@ Lookup failure retries the event. GET /api/v1/notifications?page=&size=: current
 only; POST /api/v1/notifications/{id}/read: idempotent, another user's ID is 404.
 
 Files
-Separate service, PostgreSQL metadata, binary Docker volume. POST /api/v1/files
+Separate service, PostgreSQL metadata, local S3 Silo with persistent volume. POST /api/v1/files
 multipart: orderId, relationType, file; 201 metadata. GET /api/v1/files/{id}: bytes.
 DELETE /api/v1/files/{id}: logical deletion by owner with current order access.
 GET /api/v1/orders/{id}/files?page=&size=: nondeleted metadata, max 50.
@@ -64,8 +64,22 @@ SHA-256. Generated UUID storage key, never a supplied filename/path. Atomic bina
 write before metadata/outbox commit; remove new orphan on metadata rollback.
 Download checks checksum. Retained deleted bytes have no automatic physical cleanup.
 Order stores only fileId/type links via idempotent file-event consumer; never bytes.
+S3 PutObject uses an opaque documents/UUID key and If-None-Match: *. Static local
+endpoint/credentials and path-style requests prevent accidental AWS defaults.
+Legacy volume is retained read-only; bounded startup migration verifies SHA-256
+before and after copy, including logically deleted objects. PG marks completion.
+S3 API/Console are loopback-only, private bucket and scoped File Service credentials.
 GET /api/v1/orders/{id}/file-references exposes its authorized, paginated projection
 (fileId/type only); the File Service listing remains authoritative metadata.
+
+Runtime configuration (user extension, 2026-11-19)
+Git remains the source of properties. Spring Cloud Bus Kafka transports refresh
+events on runtime-config-events (3 partitions, RF3, minISR2); all nine apps subscribe.
+Local authenticated Config management endpoint publishes targeted busrefresh;
+busenv is denied. FilePolicy applies validated max-bytes/MIME snapshots atomically,
+retains the last valid policy on rejection and exposes applied generation to
+SUPERVISOR. Storage connection settings and hard download bound are startup-only.
+Lowering the upload limit does not prevent downloading existing larger files.
 
 Verification
 L4.0: 148 tests, coverage gates, 11 healthy, protected L1/L2/L3 scenarios passed.

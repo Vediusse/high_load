@@ -8,6 +8,7 @@
 
 ```bash
 python3 scripts/setup-env.py
+python3 scripts/write-admin-access.py
 docker compose up -d --build --wait --wait-timeout 600
 ```
 
@@ -65,11 +66,11 @@ python3 scripts/lab4-outbox-smoke.py --env-file .env --failure-tests
 | Kitchen | Синхронные команды приготовления и локальная проекция; PostgreSQL/JPA |
 | Identity | Пользователи, роли, BCrypt, вход, проверка текущего состояния пользователя, внутренний JWT; PostgreSQL/JPA |
 | Notification | Внутренняя лента и обработанные события; отдельная PostgreSQL |
-| File | Метаданные, доступ, checksum и логическое удаление; отдельная PostgreSQL и binary volume |
+| File | Метаданные, доступ, checksum и логическое удаление; отдельная PostgreSQL и локальный S3 |
 | Gateway | Единственный опубликованный HTTP-вход и обмен JWT |
 | Discovery / Config | Eureka и конфигурация из Git |
 
-Всего: девять приложений, шесть PostgreSQL и три Kafka-брокера; `common` — библиотека, а `kafka-init` — завершающаяся настройка топиков.
+Всего: девять приложений, шесть PostgreSQL, три Kafka-брокера и S3 Silo (поддерживаемая ветка MinIO). `common` — библиотека; `kafka-init` и `s3-init` настраивают инфраструктуру и завершаются.
 
 ```mermaid
 flowchart LR
@@ -79,7 +80,8 @@ flowchart LR
   Gateway --> Order[Order + outbox]
   Gateway --> Kitchen[Kitchen + outbox]
   Gateway --> Notification
-  Gateway --> File[File + outbox + volume]
+  Gateway --> File[File + metadata + outbox]
+  File --> S3[Local S3 / Silo]
   Identity --> Order
   Kitchen --> Order
   Order --> Catalog
@@ -101,6 +103,8 @@ flowchart LR
 
 Топики `order-events`, `production-events`, `file-events` имеют по три partition, replication factor 3 и `min.insync.replicas=2`. Ключ — `orderId`. Содержимое событий — идентификаторы и необходимые версии; JWT, пароли и контакты не сохраняются.
 
+Файлы хранятся в локальном S3 bucket `order-files`, PostgreSQL хранит метаданные. В Kafka передаются только события о файлах. Консоль S3: [localhost:19001](http://localhost:19001), доступы — в игнорируемом `ADMIN-ACCESS.local.md`. Spring Cloud Bus передаёт сигналы обновления через `runtime-config-events`, значения перечитываются из Git без перезапуска. [Схема и сценарий демонстрации](docs/lab4-s3-runtime.md).
+
 Domain не зависит от Spring, ORM, Kafka и файловой системы. Application использует порты; REST/Kafka — входные адаптеры, БД/Feign/storage — выходные. Для JPA-агрегатов ORM mapping вынесен в инфраструктурные XML. Границы проверяет ArchUnit во всех шести бизнес-сервисах.
 
 ## Новые API
@@ -112,6 +116,7 @@ Domain не зависит от Spring, ORM, Kafka и файловой сист�
 - `DELETE /api/v1/files/{id}` — логическое удаление владельцем, `204`;
 - `GET /api/v1/orders/{id}/files?page=&size=` — актуальные метаданные File Service;
 - `GET /api/v1/orders/{id}/file-references?page=&size=` — событийная проекция ID/типов файлов в Order.
+- `GET /api/v1/files/settings` — применённый лимит/MIME и версия настроек, только `SUPERVISOR`.
 
 `SPECIFICATION` загружается для подтверждённого, готовящегося, готового или выданного заказа. `DISCREPANCY_ACT` — для готового или выданного. По умолчанию разрешены PDF/PNG/JPEG до 10 MiB; проверяются MIME, сигнатура и SHA-256. Исходное имя не используется как путь. Логическое удаление сохраняет бинарные данные и метаданные; физическая очистка не запускается автоматически.
 

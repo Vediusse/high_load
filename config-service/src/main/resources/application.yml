@@ -18,3 +18,34 @@ management:
     health:
       probes:
         enabled: true
+    busenv:
+      access: none
+    busrefresh:
+      access: unrestricted
+
+  server:
+    port: ${CONFIG_MANAGEMENT_PORT:8889}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,busrefresh
+---
+spring:
+  cloud:
+    bus:
+      enabled: ${CONFIG_BUS_ENABLED:false}
+      destination: runtime-config-events
+    stream:
+      kafka:
+        binder:
+          brokers: ${KAFKA_BOOTSTRAP_SERVERS:kafka-1:9092,kafka-2:9092,kafka-3:9092}
+          auto-create-topics: false
+          auto-add-partitions: false
+          replication-factor: 3
+          producer-properties:
+            acks: all
+            enable.idempotence: true
+          consumer-properties:
+            session.timeout.ms: 10000
+            heartbeat.interval.ms: 3000
+            metadata.max.age.ms: 10000

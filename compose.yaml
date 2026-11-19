@@ -8,6 +8,7 @@ x-app: &app
   environment: &environment
     CONFIG_SERVER_URL: http://config-service:8888
     EUREKA_URL: http://discovery-service:8761/eureka/
+    CONFIG_BUS_ENABLED: 'true'
     JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -Djava.security.properties=/jvm-network-security
   healthcheck: &health
     test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
@@ -48,6 +49,42 @@ x-kafka: &kafka
     retries: 24
     start_period: 30s
 services:
+  s3-storage:
+    image: pgsty/silo:RELEASE.2026-11-12T00-00-00Z@sha256:c20d112390b9a9ce8c11b8af95ad35bcaa62f4759663c09c936cd8d2b511f329
+    mem_limit: 512m
+    networks: [s3-local]
+    command: [server, /data, --console-address, ':9001']
+    environment:
+      MINIO_ROOT_USER: ${S3_ROOT_USER:?Set local S3 admin user}
+      MINIO_ROOT_PASSWORD: ${S3_ROOT_PASSWORD:?Set local S3 admin password}
+      MINIO_UPDATE: 'off'
+    ports:
+      - '127.0.0.1:${S3_API_PORT:-19000}:9000'
+      - '127.0.0.1:${S3_CONSOLE_PORT:-19001}:9001'
+    volumes:
+      - s3-data:/data
+    healthcheck:
+      test: [CMD-SHELL, 'mcli --config-dir /tmp/health alias set local http://localhost:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" >/dev/null 2>&1 && mcli --config-dir /tmp/health ready local >/dev/null 2>&1']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+  s3-init:
+    image: pgsty/silo:RELEASE.2026-11-12T00-00-00Z@sha256:c20d112390b9a9ce8c11b8af95ad35bcaa62f4759663c09c936cd8d2b511f329
+    mem_limit: 128m
+    networks: [s3-local]
+    entrypoint: [/bin/sh, /init-s3.sh]
+    environment:
+      S3_ROOT_USER: ${S3_ROOT_USER:?Set local S3 admin user}
+      S3_ROOT_PASSWORD: ${S3_ROOT_PASSWORD:?Set local S3 admin password}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Set File Service S3 key}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?Set File Service S3 secret}
+      S3_BUCKET: ${S3_BUCKET:-order-files}
+    volumes:
+      - ./infra/s3/init.sh:/init-s3.sh:ro
+    depends_on:
+      s3-storage:
+        condition: service_healthy
   kafka-1:
     <<: *kafka
     environment:
@@ -98,9 +135,17 @@ services:
       JAVA_TOOL_OPTIONS: -XX:MaxRAMPercentage=60 -Djava.security.properties=/jvm-network-security
       CONFIG_REPO_URI: ${CONFIG_REPO_URI:-https://github.com/Vediusse/high_load_configs.git}
       CONFIG_REPO_LABEL: ${CONFIG_REPO_LABEL:-lab4}
+      CONFIG_BUS_ENABLED: 'true'
+      CONFIG_ADMIN_USER: ${CONFIG_ADMIN_USER:?Set config admin user}
+      CONFIG_ADMIN_PASSWORD: ${CONFIG_ADMIN_PASSWORD:?Set config admin password}
+    ports:
+      - '127.0.0.1:${CONFIG_ADMIN_PORT:-18889}:8889'
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
     healthcheck:
       <<: *health
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8888/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8889/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
   discovery-service:
     <<: *app
     build:
@@ -281,6 +326,7 @@ services:
       - file-postgres-data:/var/lib/postgresql/data
   file-service:
     <<: *app
+    networks: [default, s3-local]
     build:
       context: .
       dockerfile: file-service/Dockerfile
@@ -291,9 +337,16 @@ services:
       FILE_DB_PASSWORD: ${FILE_DB_PASSWORD:?Set File DB password}
       FILE_MAX_BYTES: ${FILE_MAX_BYTES:-10485760}
       FILE_ALLOWED_MIME_TYPES: ${FILE_ALLOWED_MIME_TYPES:-application/pdf,image/png,image/jpeg}
+      S3_ENDPOINT: http://s3-storage:9000
+      S3_BUCKET: ${S3_BUCKET:-order-files}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?Set File Service S3 key}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:?Set File Service S3 secret}
+      FILE_LEGACY_DIRECTORY: /legacy-files
     volumes:
-      - files-data:/var/lib/catering-files
+      - files-data:/legacy-files:ro
     depends_on:
+      s3-init:
+        condition: service_completed_successfully
       file-postgres:
         condition: service_healthy
       discovery-service:
@@ -323,7 +376,10 @@ services:
 configs:
   jvm-network-security:
     file: ./infra/jvm/network.security
+networks:
+  s3-local: {}
 volumes:
+  s3-data:
   kafka-1-data:
   kafka-2-data:
   kafka-3-data:

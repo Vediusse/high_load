@@ -40,3 +40,9 @@ spring:
 identity:
   notifications:
     secret: ${NOTIFICATION_IDENTITY_SECRET:}
+
+---
+spring:
+  cloud:
+    bus:
+      enabled: ${CONFIG_BUS_ENABLED:false}

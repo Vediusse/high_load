@@ -31,6 +31,7 @@
         <spotless.version>3.11.0</spotless.version>
         <google-java-format.version>2.0.0</google-java-format.version>
         <maven-pmd.version>3.28.0</maven-pmd.version>
+        <aws-sdk.version>2.59.4</aws-sdk.version>
     </properties>
     <dependencyManagement>
         <dependencies>

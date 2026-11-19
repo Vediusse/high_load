@@ -12,6 +12,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.boot.test.web.server.LocalManagementPort;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -26,9 +29,49 @@ class ConfigServerIT {
     static void repository(DynamicPropertyRegistry properties) {
         properties.add("spring.cloud.config.server.git.uri", () -> REPOSITORY.toUri().toString());
         properties.add("spring.cloud.config.server.git.default-label", () -> "main");
+        properties.add("management.server.port", () -> "0");
+        properties.add("CONFIG_ADMIN_USER", () -> "config-test-admin");
+        properties.add("CONFIG_ADMIN_PASSWORD", () -> "local-test-password-only");
     }
 
     @Autowired TestRestTemplate http;
+    @LocalManagementPort int managementPort;
+
+    @Test
+    void managementPlaneRequiresAnOperatorAndDoesNotExposeBusEnv() {
+        String base = "http://localhost:" + managementPort;
+        assertThat(
+                        http.exchange(
+                                        base + "/actuator/busrefresh",
+                                        HttpMethod.POST,
+                                        HttpEntity.EMPTY,
+                                        String.class)
+                                .getStatusCode()
+                                .value())
+                .isEqualTo(401);
+        assertThat(
+                        http.withBasicAuth("config-test-admin", "local-test-password-only")
+                                .getForEntity(base + "/actuator/info", String.class)
+                                .getStatusCode()
+                                .value())
+                .isEqualTo(200);
+        assertThat(
+                        http.withBasicAuth("config-test-admin", "wrong-password")
+                                .getForEntity(base + "/actuator/info", String.class)
+                                .getStatusCode()
+                                .value())
+                .isEqualTo(401);
+        assertThat(
+                        http.withBasicAuth("config-test-admin", "local-test-password-only")
+                                .exchange(
+                                        base + "/actuator/busenv",
+                                        HttpMethod.POST,
+                                        HttpEntity.EMPTY,
+                                        String.class)
+                                .getStatusCode()
+                                .value())
+                .isEqualTo(403);
+    }
 
     @Test
     void servesSharedAndApplicationConfiguration() {

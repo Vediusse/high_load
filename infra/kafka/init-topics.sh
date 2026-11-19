@@ -7,4 +7,6 @@ for topic in order-events production-events file-events; do
       --topic "$name" --partitions 3 --replication-factor 3 --config min.insync.replicas=2
   done
 done
+/opt/kafka/bin/kafka-topics.sh --bootstrap-server "$bootstrap" --create --if-not-exists \
+  --topic runtime-config-events --partitions 3 --replication-factor 3 --config min.insync.replicas=2
 /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$bootstrap" --describe

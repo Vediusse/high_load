@@ -39,7 +39,7 @@ import ru.itmo.highload.files.application.FileActor;
 import ru.itmo.highload.files.application.FileService;
 import ru.itmo.highload.files.application.FileView;
 import ru.itmo.highload.files.application.UploadFileCommand;
-import ru.itmo.highload.files.domain.FileLimits;
+import ru.itmo.highload.files.application.ports.FilePolicy;
 import ru.itmo.highload.files.domain.RelationType;
 
 @RestController
@@ -50,7 +50,7 @@ import ru.itmo.highload.files.domain.RelationType;
 public class FileController {
     private final FileService files;
     private final BlockingRequests blocking;
-    private final FileLimits limits;
+    private final FilePolicy policy;
     private final Semaphore uploads = new Semaphore(2);
 
     @PostMapping(value = "/api/v1/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -85,7 +85,7 @@ public class FileController {
                     return true;
                 }),
                 permit ->
-                        DataBufferUtils.join(part.content(), limits.maxBytes())
+                        DataBufferUtils.join(part.content(), policy.current().maxBytes())
                                 .map(buffer -> {
                                     try {
                                         byte[] bytes = new byte[buffer.readableByteCount()];

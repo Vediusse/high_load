@@ -9,6 +9,16 @@ import secrets
 import subprocess
 import tempfile
 
+def infrastructure_defaults():
+    return {
+        "S3_ROOT_USER": "s3-admin", "S3_ROOT_PASSWORD": secrets.token_urlsafe(32),
+        "S3_ACCESS_KEY": "files-" + secrets.token_hex(6), "S3_SECRET_KEY": secrets.token_urlsafe(32),
+        "S3_BUCKET": "order-files", "S3_API_PORT": "19000", "S3_CONSOLE_PORT": "19001",
+        "CONFIG_ADMIN_USER": "config-admin", "CONFIG_ADMIN_PASSWORD": secrets.token_urlsafe(32),
+        "CONFIG_ADMIN_PORT": "18889",
+    }
+
+
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--env-file', default='.env')
 parser.add_argument('--project', default='high-load-lab4')
@@ -16,7 +26,15 @@ parser.add_argument('--port', type=int, default=8080)
 args = parser.parse_args()
 path = Path(args.env_file)
 if path.exists():
-    print('Existing environment preserved: ' + str(path))
+    content = path.read_text()
+    keys = {line.split('=', 1)[0] for line in content.splitlines() if '=' in line and not line.startswith('#')}
+    additions = {key: value for key, value in infrastructure_defaults().items() if key not in keys}
+    if additions:
+        temporary = path.with_name(path.name + '.new')
+        with os.fdopen(os.open(str(temporary), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as output:
+            output.write(content.rstrip() + '\n' + ''.join(key + '=' + value + '\n' for key, value in additions.items()))
+        os.replace(str(temporary), str(path))
+    print('Existing credentials preserved; missing infrastructure settings added: ' + str(path))
     raise SystemExit(0)
 if not re.fullmatch(r'[a-z0-9][a-z0-9_-]+', args.project) or not 1 <= args.port <= 65535:
     parser.error('Invalid Compose project or HTTP port')
@@ -46,6 +64,7 @@ with tempfile.TemporaryDirectory(prefix='lab4-keys-') as temporary:
         'IDENTITY_BOOTSTRAP_LOGIN': 'supervisor', 'IDENTITY_BOOTSTRAP_PASSWORD': secrets.token_urlsafe(24),
         'FILE_MAX_BYTES': '10485760', 'FILE_ALLOWED_MIME_TYPES': 'application/pdf,image/png,image/jpeg',
     }
+values.update(infrastructure_defaults())
 path.parent.mkdir(parents=True, exist_ok=True)
 with os.fdopen(os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as output:
     output.write('# Private local environment. Never commit this file.\n')

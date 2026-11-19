@@ -32,3 +32,6 @@ backups/
 /CREDENTIALS.local.md
 /ADMIN-ACCESS.local.md
 /postman/*.local.postman_environment.json
+/output/
+/tmp/
+/DEMO-FILES.local.md

@@ -23,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -212,6 +213,38 @@ class FileIT {
     }
 
     @Test
+    void unicodeDownloadNameUsesRfc8187WithoutEncodedWord() {
+        String name = "Спецификация № 42.pdf";
+        var file =
+                upload(PDF, "application/pdf", name, "SPECIFICATION", own())
+                        .expectStatus()
+                        .isCreated()
+                        .expectBody(JsonNode.class)
+                        .returnResult()
+                        .getResponseBody();
+        http.get()
+                .uri("/api/v1/files/" + file.get("id").asText())
+                .header("Authorization", own())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .value(
+                        "Content-Disposition",
+                        value -> {
+                            assertThat(value)
+                                    .startsWith("attachment; filename=\"document.pdf\";")
+                                    .contains("filename*=UTF-8''")
+                                    .doesNotContain("=?UTF-8");
+                            assertThat(ContentDisposition.parse(value).getFilename())
+                                    .isEqualTo(name);
+                        })
+                .expectBody()
+                .consumeWith(
+                        response -> assertThat(response.getResponseBody()).containsExactly(PDF));
+    }
+
+    @Test
     void roundTripUsesOpaqueStorageAndDeletionRetainsBytesButHidesTheFile() throws Exception {
         var file = create();
         String id = file.get("id").asText();
@@ -232,6 +265,8 @@ class FileIT {
                 .contentType(MediaType.APPLICATION_PDF)
                 .expectHeader()
                 .valueEquals("X-Content-Type-Options", "nosniff")
+                .expectHeader()
+                .valueEquals("Content-Disposition", "attachment; filename=\"source.pdf\"")
                 .expectBody()
                 .consumeWith(
                         response -> assertThat(response.getResponseBody()).containsExactly(PDF));

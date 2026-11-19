@@ -3,14 +3,12 @@ package ru.itmo.highload.files.adapters.in.rest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.CacheControl;
-import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -134,12 +132,7 @@ public class FileController {
                                 .header("X-Content-Type-Options", "nosniff")
                                 .header(
                                         HttpHeaders.CONTENT_DISPOSITION,
-                                        ContentDisposition.attachment()
-                                                .filename(
-                                                        result.metadata().originalName(),
-                                                        StandardCharsets.UTF_8)
-                                                .build()
-                                                .toString())
+                                        DownloadName.attachment(result.metadata().originalName()))
                                 .body(result.bytes()));
     }
 

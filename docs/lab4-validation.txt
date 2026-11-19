@@ -135,3 +135,24 @@ GitHub остаётся источником конфигов; изменени�
 Проверены первичные документы Spring Cloud Config/Bus, GitHub Web Editor,
 Spring Boot Admin, Nacos, SCCA; архитектура не заменена другим config backend.
 Java не менялась, базовые Maven 201 tests / Spotless / PMD / ArchUnit не повторялись.
+
+Обновление PDF и имён скачивания, 2026-11-20
+
+Прежние технические примеры заменены спецификацией и актом с данными текущего
+заказа из API. Клиент Postman формирует документ; File хранит/возвращает исходные
+байты. У каждого заказа свой ID в PDF и своя контрольная сумма. Старые fileId
+сохраняют прежнее содержимое, нужна новая загрузка/повтор папки 02.
+Content-Disposition: ASCII filename без RFC2047; Unicode через filename* RFC8187
+с безопасным ASCII fallback. Исходное имя не управляет путём хранения.
+
+Фактически повторены: File module verify — 16 tests, Spotless/PMD/ArchUnit/coverage;
+два файловых прогона — 82 requests / 128 assertions; вся коллекция —
+144 requests / 237 assertions; в этих проверках 0 failures.
+PDF проверены строгим pypdf, Poppler и визуально; 19 контейнеров healthy.
+Полный Maven baseline 201 в этом исправлении не повторялся.
+
+Дополнительная попытка 10 MiB→2 KiB не прошла из-за TLS EOF/reset при доступе
+Config Server к GitHub. Исходный лимит восстановлен в Git (lab4 54a3d39) и
+подтверждён через API/реальные загрузки; File не перезапускался при проверке.
+Git cache сохранил предыдущий ece3f7c с тем же исходным лимитом 10 MiB.
+Подробный результат и границы проверки: postman/validation.txt.

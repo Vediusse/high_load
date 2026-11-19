@@ -11,37 +11,8 @@ POSTMAN = ROOT / 'postman'
 NAMESPACE = uuid.UUID('bd37b377-c538-45bc-9a1b-9ec82e115c59')
 
 
-def pdf(title, padding=0):
-    content = ('BT /F1 20 Tf 50 740 Td (' + title + ') Tj '
-               '/F1 12 Tf 0 -35 Td (Lab 4 - local S3 demonstration) Tj '
-               '0 -25 Td (This is a generated test document.) Tj '
-               '0 -25 Td (PostgreSQL stores metadata. S3 stores this PDF.) Tj ET\n')
-    objects = [
-        '<< /Type /Catalog /Pages 2 0 R >>',
-        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] '
-        '/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
-        '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-        '<< /Length ' + str(len(content)) + ' >>\nstream\n' + content + 'endstream',
-    ]
-    result = '%PDF-1.4\n'
-    offsets = [0]
-    for index, value in enumerate(objects, 1):
-        offsets.append(len(result))
-        result += str(index) + ' 0 obj\n' + value + '\nendobj\n'
-    if padding:
-        result += '%' + 'x' * padding + '\n'
-    xref = len(result)
-    result += 'xref\n0 6\n0000000000 65535 f \n'
-    result += ''.join(f'{offset:010} 00000 n \n' for offset in offsets[1:])
-    result += f'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n'
-    return result
-
-
-SMALL = pdf('ORDER SPECIFICATION')
-ACT = pdf('DISCREPANCY ACT')
-LARGE = pdf('LARGE SPECIFICATION', 5000)
-assert len(SMALL) < 2048 < len(LARGE) < 10485760
+ASSETS = json.loads((POSTMAN / 'pdf-assets.json').read_text())
+PDF_RENDERER = (POSTMAN / 'pdf-renderer.js').read_text()
 
 
 def lines(source):
@@ -160,10 +131,10 @@ class Folder:
         self.user('client', 'CLIENT_MANAGER')
         self.user('kitchen', 'KITCHEN_MANAGER')
         self.add('CLIENT_MANAGER — создать организацию', 'POST', '/api/v1/organizations', 'client',
-                 {'name': 'Postman ' + self.v('runId'), 'phone': '+79990000111'}, 201, self.save('orgId'))
+                 {'name': 'ООО «Северный офис» / ' + self.v('runId'), 'phone': '+79990000111'}, 201, self.save('orgId') + self.save('organization', 'name'))
         self.add('CLIENT_MANAGER — создать точку выдачи', 'POST', '/api/v1/organizations/' + self.v('orgId') + '/delivery-points',
-                 'client', {'name': 'Postman office', 'address': 'Кронверкский проспект, 49',
-                            'contactName': 'Demo', 'contactPhone': '+79990000111'}, 201, self.save('pointId'))
+                 'client', {'name': 'Офис на Кронверкском', 'address': 'Кронверкский проспект, 49',
+                            'contactName': 'Анна Смирнова', 'contactPhone': '+79990000111'}, 201, self.save('pointId') + "\npm.environment.set('$P_pointData', JSON.stringify(pm.response.json()));")
         self.user('owner', 'ORGANIZATION_REPRESENTATIVE', True)
         self.add('Представитель — проверить /me и организацию', 'GET', '/api/v1/me', 'owner', tests='''
         const data = pm.response.json();
@@ -178,7 +149,7 @@ class Folder:
                  self.dish_body(250), 201, self.save('dishId'))
 
     def dish_body(self, price):
-        return {'name': 'Postman meal ' + self.v('runId'), 'description': 'Постоянное меню',
+        return {'name': 'Куриное филе с гречкой', 'description': 'Постоянное меню',
                 'currentPrice': price, 'categoryIds': [self.v('categoryId')]}
 
     def foreign(self):
@@ -192,11 +163,12 @@ class Folder:
         pm.test('Статус {status}', () => pm.expect(data.status).to.eql('{status}'));
         pm.environment.set('$P_{key}Id', data.id);
         pm.environment.set('$P_{key}Version', data.version);
+        pm.environment.set('$P_{key}Data', JSON.stringify(data));
         '''
 
     def create_order(self, key='order'):
         self.add('Представитель — новый DRAFT (' + key + ')', 'POST', '/api/v1/orders', 'owner',
-                 {'deliveryPointId': self.v('pointId'), 'requestedDeliveryAt': self.v('future'), 'comment': 'Postman demo'},
+                 {'deliveryPointId': self.v('pointId'), 'requestedDeliveryAt': self.v('future'), 'comment': 'Комплексный обед. Приборы и упаковка включены.'},
                  201, self.order_checks(key, 'DRAFT'))
 
     def order_lines(self, key='order'):
@@ -245,12 +217,24 @@ class Folder:
         self.add(actor.upper() + ' — дождаться ' + event, 'GET', '/api/v1/notifications?size=50', actor,
                  tests=tests + visualizer(event), description='В Runner запрос повторяется до появления события, максимум pollTimeoutMs. При ручном Send повторите запрос, если событие ещё в пути. Visualize показывает ленту.')
 
-    def upload(self, key='file', fixture='demoPdfSmall', relation='SPECIFICATION', status=201, mime='application/pdf', tests=''):
-        pre = r"""
+    def upload(self, key='file', fixture=None, relation='SPECIFICATION', status=201, mime='application/pdf', tests=''):
+        fixture = fixture or ('demoPdfSmall' if self.prefix == 'runtime' else 'demoPdfSpecification')
+        pre = PDF_RENDERER + r"""
         const boundary = 'postman-' + pm.variables.replaceIn('{{$guid}}');
-        const content = pm.collectionVariables.get('@FIXTURE@');
+        const assets = JSON.parse(pm.collectionVariables.get('demoPdfAssets'));
+        let asset = assets['@FIXTURE@'];
+        if (asset && asset.alias) asset = assets[asset.alias];
+        const context = {
+            order: JSON.parse(pm.environment.get('$P_orderData')),
+            organization: {name: pm.environment.get('$P_organization')},
+            point: JSON.parse(pm.environment.get('$P_pointData')),
+            acceptedQuantity: '@RELATION@' === 'DISCREPANCY_ACT' ? Number(pm.environment.get('$P_receivedQuantity') || 1) : undefined
+        };
+        const content = '@FIXTURE@' === 'demoInvalidPdf' ? 'This is not a PDF.' : renderOrderPdf(asset, context);
+        pm.environment.set('$P_@KEY@Bytes', content.length);
+        pm.environment.set('$P_@KEY@ExpectedChecksum', require('crypto-js').SHA256(content).toString());
         const order = pm.environment.get('$P_orderId');
-        const filename = '$P-@KEY@-' + pm.environment.get('$P_runId') + '.pdf';
+        const filename = ('@RELATION@' === 'DISCREPANCY_ACT' ? 'discrepancy-act-' : 'specification-') + order.slice(0,8) + '.pdf';
         const body = '--' + boundary + '\r\nContent-Disposition: form-data; name="orderId"\r\n\r\n' + order + '\r\n'
             + '--' + boundary + '\r\nContent-Disposition: form-data; name="relationType"\r\n\r\n@RELATION@\r\n'
             + '--' + boundary + '\r\nContent-Disposition: form-data; name="file"; filename="' + filename + '"\r\nContent-Type: @MIME@\r\n\r\n'
@@ -263,6 +247,7 @@ class Folder:
             pm.test('Только метаданные, без storageKey', () => {
                 pm.expect(pm.response.json().status).to.eql('ACTIVE');
                 pm.expect(pm.response.json()).not.to.have.property('storageKey');
+                pm.expect(pm.response.json().checksum).to.eql(pm.environment.get('$P_''' + key + '''ExpectedChecksum'));
             });
             ''' + tests
         self.add('Представитель — загрузить ' + key + ' (' + relation + ')', 'POST', '/api/v1/files', 'owner',
@@ -275,7 +260,9 @@ class Folder:
         pm.test('PDF и SHA-256 совпадают', () => {
             pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf');
             pm.expect(pm.response.headers.get('Content-Disposition')).to.include('attachment');
+            pm.expect(pm.response.headers.get('Content-Disposition')).not.to.include('=?UTF-8');
             pm.expect(pm.response.text().startsWith('%PDF-')).to.eql(true);
+            pm.expect(pm.response.text()).to.include(pm.environment.get('$P_orderId'));
             pm.expect(crypto.SHA256(pm.response.text()).toString()).to.eql(pm.environment.get('$P_''' + key + '''Checksum'));
         });
         '''
@@ -450,8 +437,8 @@ if (ready) {
 }
 ''')
 runtime.section('03 — После изменения: проверить реальное поведение')
-runtime.upload('large', fixture='demoPdfLarge', status=None, tests=f'''
-const expected = Number(pm.environment.get('expectedFileMaxBytes')) >= {len(LARGE)} ? 201 : 413;
+runtime.upload('large', fixture='demoPdfLarge', status=None, tests='''
+const expected = Number(pm.environment.get('expectedFileMaxBytes')) >= Number(pm.environment.get('$P_largeBytes')) ? 201 : 413;
 const errorHint = pm.response.code >= 400 ? JSON.stringify(pm.response.json()) : '';
 pm.test('Большой PDF: ' + expected + ' при текущем лимите', () => pm.expect(pm.response.code, errorHint).to.eql(expected));
 ''')
@@ -470,8 +457,7 @@ collection = {
              'schema': 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
              'description': 'Импортировать этот JSON и lab4.local.postman_environment.json, выбрать environment. Run всей коллекции или одной из четырёх родительских папок, 1+ iterations, delay 100 ms. Внутри: подготовка, основной путь и отдельные случаи в подпапках. Для отдельной подпапки сначала выполнить подготовку и предыдущие шаги её основного сценария. Каждая родительская папка независима: собственные роли, уникальные имена, новые ID и версии. Токены подставляются автоматически. Все HTTP-запросы видимы, скрытых pm.sendRequest нет. Kafka-проверки повторяют только GET до pollTimeoutMs. PDF встроены, Working directory не нужен. Основная спецификация и акт остаются доступными для скачивания.\n\nRuntime: значения редактируются в GitHub config-repo или scripts/demo-runtime-config.py; затем expectedFileMaxBytes и подпапка «Применить Git commit через Kafka». При полном Run папки подготовка выполняется автоматически. После демонстрации --restore и повторный Run. Корень localhost:18889/ возвращает 404: это management API без UI. Swagger: http://localhost:18084/swagger-ui/index.html, File/settings под SUPERVISOR.\n\nСценарии создают тестовые данные и не удаляют прежние. Не экспортируйте заполненное environment с паролями и JWT. Генератор: scripts/build-postman.py; инструкция: postman/README.md.'},
     'auth': {'type': 'noauth'}, 'item': [f.node for f in folders],
-    'variable': [{'key': key, 'value': value, 'type': 'string'} for key, value in [
-        ('demoPdfSmall', SMALL), ('demoPdfAct', ACT), ('demoPdfLarge', LARGE), ('demoInvalidPdf', 'This is not a PDF.\n')]],
+    'variable': [{'key': 'demoPdfAssets', 'value': json.dumps(ASSETS, ensure_ascii=False), 'type': 'string'}],
 }
 values = [
     ('baseUrl', 'http://localhost:18084', 'default'),
@@ -490,7 +476,4 @@ environment = {'id': str(uuid.uuid5(NAMESPACE, 'environment')), 'name': 'Lab4 �
 POSTMAN.mkdir(exist_ok=True)
 for filename, data in [('lab4.postman_collection.json', collection), ('lab4.postman_environment.json', environment)]:
     (POSTMAN / filename).write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
-(POSTMAN / 'fixtures').mkdir(exist_ok=True)
-for name, content in [('specification.pdf', SMALL), ('discrepancy-act.pdf', ACT), ('large-specification.pdf', LARGE)]:
-    (POSTMAN / 'fixtures' / name).write_bytes(content.encode('ascii'))
 print('Built ' + str(sum(f.request_count for f in folders)) + ' visible requests in 4 independent folders with subsections')

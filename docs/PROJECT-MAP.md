@@ -94,13 +94,13 @@ GitHub поддерживает [редактирование и commit чере
 | Меню | `catalog-service/` | Категории, блюда, цены; реактивный R2DBC. |
 | Организации и заказы | `order-service/` | Организации/точки, заказ, снимок цены, история, optimistic locking, outbox, ссылки fileId. |
 | Кухня | `kitchen-service/` | Ручные команды, идемпотентные receipt и событийная проекция. |
-| Файлы | `file-service/` | Метаданные/права/checksum, S3-адаптер, перенос старого volume, runtime FilePolicy. |
+| Файлы | `file-service/` | Метаданные/права/checksum, S3-адаптер, перенос старого volume, runtime FilePolicy; скачивание исходных байтов с корректным именем. |
 | Уведомления | `notification-service/` | Kafka consumers, inbox, персональная лента и отметка прочтения. |
 | Конфигурация | `config-service/` и отдельный `high_load_configs` | Git backend, защищённый Bus refresh; общие и сервисные YAML. |
 | Поиск сервисов | `discovery-service/` | Eureka. |
 | Общая инфраструктура Java | `common/` | Outbox/inbox, безопасность, ошибки, пагинация и выполнение блокирующих вызовов. |
 | Docker и инициализация | `compose.yaml`, `infra/kafka/`, `infra/s3/` | 3 брокера, топики/репликация, приватный S3 bucket и отдельный ключ File. |
-| Демонстрация API | `postman/` | 4 родительские папки с подпапками основного пути и отдельных проверок. |
+| Демонстрация API | `postman/` | 4 родительские папки с подпапками; PDF спецификации/акта формируются клиентом из ответов текущего заказа, затем загружаются в File. |
 | Проверки/демо из терминала | `scripts/` | Запуск smoke, генерация демоданных, environment и Git/runtime helper. |
 | Читаемость и архитектура | `pom.xml`, `config/quality/pmd.xml`, `*CleanArchitectureTest.java` | Spotless, PMD, ArchUnit; домен без Spring/ORM/Kafka/S3. |
 | Планы и локальные отчёты | `AI/state/`, `AI/high-load-lab-4/` | Контрольные точки и доказательства; локальная папка исключена из Git. |
@@ -140,6 +140,7 @@ volume в `/data`; старый `files-data` оставлен File Service ка�
 | [Postman: импорт и сценарии](../postman/README.md) | Что запускать по папкам и как скачать PDF/показать Visualize. |
 | `CREDENTIALS.local.md` | Локальные бизнес-роли и ID. |
 | `ADMIN-ACCESS.local.md` | Локальные доступы S3/Config operator. |
+| `DEMO-FILES.local.md` | Созданные проверкой новые PDF: пользователь и ID для скачивания через Swagger; приватный локальный файл. |
 | [Проверки lab4](lab4-validation.txt), [проверки Postman](../postman/validation.txt) | Результаты фактических прогонов. |
 
 Исходники схем — `docs/diagrams/*.dot`; готовые картинки — SVG и PNG рядом.

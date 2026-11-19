@@ -23,7 +23,8 @@ File Service использует отдельный scoped access key `{access}
 
 # Runtime-конфигурация
 
-Management: http://localhost:{admin_port}
+Health: http://localhost:{admin_port}/actuator/health
+API base: http://localhost:{admin_port} (служебный REST API, корень / возвращает 404)
 Login: `{admin_user}`
 Password: `{admin_password}`
 
@@ -31,6 +32,7 @@ Password: `{admin_password}`
 `python3 scripts/refresh-config.py --destination 'file-service:**'`
 
 Применённые значения: Swagger → File → GET /api/v1/files/settings, роль SUPERVISOR.
+Готовые запросы и сценарий изменения: postman/README.md.
 '''.format(console=env.get('S3_CONSOLE_PORT', '19001'), api=env.get('S3_API_PORT', '19000'),
            bucket=env.get('S3_BUCKET', 'order-files'), s3_user=env['S3_ROOT_USER'],
            s3_password=env['S3_ROOT_PASSWORD'], access=env['S3_ACCESS_KEY'],

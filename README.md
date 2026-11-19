@@ -57,6 +57,13 @@ python3 scripts/lab4-outbox-smoke.py --env-file .env --failure-tests
 
 Для другого порта передать `--base-url http://localhost:PORT`. Сценарии создают демонстрационные данные. Последняя команда временно останавливает Kafka и Notification и проверяет восстановление. Подробные команды защиты и повторной доставки — в [docs/lab4-run.md](docs/lab4-run.md).
 
+## Postman
+
+Четыре независимые повторяемые папки: бизнес-флоу, файлы/S3, уведомления и runtime
+конфигурация. Импортировать [коллекцию lab4](postman/lab4.postman_collection.json)
+и локальный environment, который создаёт `python3 scripts/setup-postman.py`.
+PDF встроены, ID/версии/JWT заполняются автоматически. [Импорт и демонстрация](postman/README.md).
+
 ## Сервисы и данные
 
 | Сервис | Ответственность |

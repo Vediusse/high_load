@@ -16,3 +16,4 @@ target
 **/target
 Архив.zip
 ADMIN-ACCESS.local.md
+postman/*.local.postman_environment.json

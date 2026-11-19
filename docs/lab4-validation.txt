@@ -63,9 +63,45 @@ poison/DLT и replay без дублей. Полный Kafka outage сохран
 после восстановления pending доставлен. Notification outage/backlog пройдены.
 
 Config Server читает HTTPS GitHub напрямую, без local override:
-label lab4, commit c09aa21b2d95548a251eb2a634c4b7b27bfab933.
+label lab4, commit 7611e569bf405268c8d34e1c63c4a1aaff02ec6a.
 Доступы — CREDENTIALS.local.md и ADMIN-ACCESS.local.md (0600, Git ignored).
 .env/доступы/backup отсутствуют в Git и Docker build context.
 Инструкция и схемы: docs/lab4-s3-runtime.md; бизнес-демо: docs/lab4-run.md.
 Границы production описаны в docs/architecture.txt; учебный стенд не заявляется
 готовым production-кластером. Финальную приёмку выполняет пользователь.
+
+Дополнение Postman 2026-11-19
+Postman lab4 — проверка 2026-11-19
+
+Коллекция: postman/lab4.postman_collection.json, 4 независимые папки,
+140 запросов: бизнес 40, файлы 42, уведомления 32, runtime 26.
+Два полных прогона подряд: 289 HTTP requests (включая bounded polling),
+477 assertions, 0 failures. Новые имена/ID/версии и отдельные переменные папок.
+
+Отдельная папка runtime при реальном commit/push Git:
+2048 bytes — 2 iterations, 55 requests / 91 assertions / 0 failures;
+10485760 bytes — 2 iterations, 54 requests / 90 assertions / 0 failures.
+Первое изменение: 10 MiB -> 2 KiB, generation 1 -> 2, большой PDF=413.
+Повтор 2 KiB: generation 2 -> 2, без лишнего commit.
+Восстановление: 2 KiB -> 10 MiB, generation 2 -> 3, большой PDF=201.
+Повтор 10 MiB также проходит. Существующий PDF скачивается, SHA-256 проверен.
+Итого Newman: 398 requests / 658 assertions / 0 failures.
+File StartedAt не менялся во время четырёх runtime-прогонов:
+2026-11-19T20:39:50.789223052Z
+В логах за этот период нет остановки EurekaClient и ошибок сериализации.
+
+Config repo lab4: 7611e569bf405268c8d34e1c63c4a1aaff02ec6a.
+File: eureka.client.refresh.enable=false, refresh политики не пересоздаёт discovery.
+Bus: auto.offset.reset=latest, новые подписчики не проигрывают старые refresh.
+Бизнес-consumers сохраняют свои offsets/earliest; Root Spring Kafka настройки
+не менялись. Git helper меняет только max-bytes; второй вызов идемпотентен.
+
+localhost:18889/ = 404 (REST management, страницы нет);
+/actuator/health = 200; files/settings через Gateway требует SUPERVISOR JWT.
+Документированы реальные пути, JSON Content-Type, Basic Config operator и Swagger.
+
+Все 3 PDF проверены pdfinfo/pdftotext, по одной открываемой странице.
+PDF встроены в JSON, Working directory не нужен. Спецификация и акт остаются
+ACTIVE после Run, удаляется отдельный временный экземпляр.
+Environment с реальными секретами — только локальный файл 0600, Git/Docker ignored.
+Java не менялась; Maven baseline 201 tests/статические проверки остаётся прежней.

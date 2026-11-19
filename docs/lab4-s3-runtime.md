@@ -93,6 +93,14 @@ sequenceDiagram
 10 MiB задаются при старте; для их замены нужен перезапуск. Снижение лимита
 загрузки не закрывает скачивание уже сохранённых более крупных файлов.
 
+У File Service `eureka.client.refresh.enable=false`: refresh политики не пересоздаёт
+discovery-клиент. Настройки самого соединения с Eureka применяются при запуске.
+
+Готовые повторяемые сценарии Postman, включая refresh и проверку лимита:
+[postman/README.md](../postman/README.md). Корень management-порта `:18889/` не
+имеет страницы; health находится по `/actuator/health`, а политика — через Gateway
+по `/api/v1/files/settings` с JWT супервизора.
+
 ## Демонстрация без перезапуска
 
 1. В Swagger войти как **SUPERVISOR**, File → `GET /api/v1/files/settings`.

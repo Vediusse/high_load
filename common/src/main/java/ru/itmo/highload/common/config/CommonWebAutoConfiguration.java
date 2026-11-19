@@ -1,7 +1,9 @@
 package ru.itmo.highload.common.config;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import ru.itmo.highload.common.error.GlobalExceptionHandler;
 import ru.itmo.highload.common.error.TraceFilter;
@@ -11,10 +13,18 @@ import ru.itmo.highload.common.error.TraceFilter;
 public class CommonWebAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
-    TraceFilter traceFilter() { return new TraceFilter(); }
+    TraceFilter traceFilter() {
+        return new TraceFilter();
+    }
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnProperty(prefix = "catering.web.errors", name = "enabled", havingValue = "true", matchIfMissing = true)
-    GlobalExceptionHandler globalExceptionHandler() { return new GlobalExceptionHandler(); }
+    @ConditionalOnProperty(
+            prefix = "catering.web.errors",
+            name = "enabled",
+            havingValue = "true",
+            matchIfMissing = true)
+    GlobalExceptionHandler globalExceptionHandler() {
+        return new GlobalExceptionHandler();
+    }
 }

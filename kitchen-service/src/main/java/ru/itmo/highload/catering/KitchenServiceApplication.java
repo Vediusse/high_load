@@ -7,5 +7,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 @SpringBootApplication
 @EnableFeignClients
 public class KitchenServiceApplication {
-    public static void main(String[] args) { SpringApplication.run(KitchenServiceApplication.class, args); }
+    public static void main(String[] args) {
+        SpringApplication.run(KitchenServiceApplication.class, args);
+    }
 }

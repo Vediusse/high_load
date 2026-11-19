@@ -1,5 +1,6 @@
 package ru.itmo.highload.common.security;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
@@ -10,9 +11,9 @@ import reactor.core.publisher.Mono;
 
 @RestControllerAdvice
 @Order(-10)
+@RequiredArgsConstructor
 public class SecurityExceptionHandler {
     private final SecurityResponses responses;
-    public SecurityExceptionHandler(SecurityResponses responses) { this.responses = responses; }
 
     @ExceptionHandler(AccessDeniedException.class)
     Mono<Void> denied(AccessDeniedException error, ServerWebExchange exchange) {

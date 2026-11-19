@@ -13,3 +13,9 @@ catering:
       issuer: corporate-catering-internal
       ttl: 30s
       clock-skew: 2s
+
+---
+spring:
+  cloud:
+    bus:
+      enabled: ${CONFIG_BUS_ENABLED:false}

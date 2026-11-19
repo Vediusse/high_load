@@ -1,0 +1,92 @@
+Lab4 implementation contract over accepted lab3 (c9f0d1f)
+
+Sources: AI/high-load-lab-4/references/{requirements,design,stages,validation}.md;
+Artefacts 03/04/05/06/07/08. Existing kitchen-service is the accepted name of
+the Production contour; keep its identity, tables, volumes and REST contracts.
+
+Architecture
+domain: pure Java models, invariants, failures; no Spring/persistence/Kafka/file API.
+application: use cases and output ports, no dependency on adapters.
+adapters/in: REST/Kafka; adapters/out: persistence/Feign/broker/storage.
+configuration: wiring and transaction boundaries. ArchUnit enforces direction.
+Refactor catalog, order, kitchen, identity individually; preserve API, pagination,
+error DTOs, optimistic locking, transactions and security at each step.
+Do not invent business layers in gateway/config/discovery.
+Order keeps its managed plain-Java aggregates: persistence metadata is an external
+Hibernate mapping in META-INF/order-domain.hbm.xml. Explicit collection optimistic
+locking is retained there; the domain imports no ORM annotations. Transactions are
+wired around use cases, and repository/query/receipt operations are output ports.
+
+Kafka and events
+Three KRaft broker/controllers, distinct IDs and persistent volumes. order-events,
+production-events, file-events: 3 partitions, RF=3, min ISR=2. Key=orderId.
+Envelope: eventId, eventType, aggregateId (orderId), occurredAt UTC, version=1,
+payload {organizationId,orderVersion,actorUserId}, plus fileId/relationType/fileVersion for files.
+No JWT/password/contact details. Independent topics use orderVersion for stale checks.
+Order emits ORDER_SUBMITTED/CONFIRMED/REJECTED/CANCELLED/COMPLETED.
+Kitchen emits COOKING_STARTED/ORDER_READY after its durable command receipt.
+File emits FILE_UPLOADED/FILE_DELETED with its metadata transaction.
+Notification consumes all topics. Kitchen consumes confirmed/cancelled to maintain
+its existing projection. Order consumes file events to store fileId/type links only.
+All existing commands and authoritative Order status transitions remain synchronous.
+
+Reliability
+State/history/outbox_event commit in one local transaction. Unique command/event IDs
+protect replays. Relay marks sent only after Kafka ack: acks=all, idempotent producer,
+bounded retries/network waits/batches. Earliest pending event for an aggregate precedes
+later events. Failed rows retain payload and a retry time; no silent deletion.
+Consumer effect and processed_event commit together, protected by DB uniqueness.
+Offsets follow DB commit. Bounded poison retries then replicated dead-letter topic;
+failed DLQ publication cannot acknowledge/lose the original event.
+Cross-service synchronous receipt retries preserve the original audit actor/version.
+Production events retain the receipt version; actorUserId is null because Kitchen
+cannot infer the original actor from a retry caller. Authoritative audit stays in Order.
+
+Notifications
+PostgreSQL notification(id,recipient_user_id,type,subject_id,text,created_at,read_at),
+processed_event(event_id,processed_at); unique(event_id,recipient_user_id).
+Active kitchen managers: submitted/cancelled. Organization representatives:
+confirmed/rejected/ready/completed. Client managers: cancellation. File events:
+participants with order access. Resolve recipients through paginated internal Identity
+lookup with a separate service credential from env, never a persisted user JWT.
+Lookup failure retries the event. GET /api/v1/notifications?page=&size=: current user
+only; POST /api/v1/notifications/{id}/read: idempotent, another user's ID is 404.
+
+Files
+Separate service, PostgreSQL metadata, local S3 Silo with persistent volume. POST /api/v1/files
+multipart: orderId, relationType, file; 201 metadata. GET /api/v1/files/{id}: bytes.
+DELETE /api/v1/files/{id}: logical deletion by owner with current order access.
+GET /api/v1/orders/{id}/files?page=&size=: nondeleted metadata, max 50.
+SPECIFICATION: confirmed/in-cooking/ready/completed; DISCREPANCY_ACT: ready/completed.
+Order access follows current JWT/tenant rules via authenticated internal Order API.
+Default 10 MiB, PDF/PNG/JPEG; configurable allowlist/limit; inspect signatures and
+SHA-256. Generated UUID storage key, never a supplied filename/path. Atomic binary
+write before metadata/outbox commit; remove new orphan on metadata rollback.
+Download checks checksum. Retained deleted bytes have no automatic physical cleanup.
+Order stores only fileId/type links via idempotent file-event consumer; never bytes.
+S3 PutObject uses an opaque documents/UUID key and If-None-Match: *. Static local
+endpoint/credentials and path-style requests prevent accidental AWS defaults.
+Legacy volume is retained read-only; bounded startup migration verifies SHA-256
+before and after copy, including logically deleted objects. PG marks completion.
+S3 API/Console are loopback-only, private bucket and scoped File Service credentials.
+GET /api/v1/orders/{id}/file-references exposes its authorized, paginated projection
+(fileId/type only); the File Service listing remains authoritative metadata.
+
+Runtime configuration (user extension, 2026-11-19)
+Git remains the source of properties. Spring Cloud Bus Kafka transports refresh
+events on runtime-config-events (3 partitions, RF3, minISR2); all nine apps subscribe.
+Local authenticated Config management endpoint publishes targeted busrefresh;
+busenv is denied. FilePolicy applies validated max-bytes/MIME snapshots atomically,
+retains the last valid policy on rejection and exposes applied generation to
+SUPERVISOR. Storage connection settings and hard download bound are startup-only.
+Lowering the upload limit does not prevent downloading existing larger files.
+
+Verification
+L4.0: 148 tests, coverage gates, 11 healthy, protected L1/L2/L3 scenarios passed.
+L4.2: per-service architecture and behavior regression. L4.3: real cluster metadata,
+replication and one-broker loss. L4.4: confirm/outbox/one notification and Kafka outage.
+L4.5: every event, own feed/read, duplicate, backlog and poison handling.
+L4.6: file round-trip, MIME/size/checksum, foreign access and deletion.
+L4.7: full verify, clean migrations, final Compose, regression and failure/recovery.
+Intermediate results remain READY_FOR_REVIEW. Autonomous continuation was explicitly
+authorized on 2026-11-18; final approval remains with the user.

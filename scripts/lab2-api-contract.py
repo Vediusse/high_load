@@ -30,6 +30,13 @@ expected_schemas = deepcopy(baseline["components"]["schemas"])
 # required for a client manager, but that conditional requirement cannot be
 # represented by OpenAPI's static `required` list.
 expected_schemas["CreateOrderRequest"]["required"].remove("organizationId")
+# The approved lab4 file-reference endpoint is tested separately; compare every
+# original operation and DTO exactly, keeping unexpected changes detectable.
+file_references = paths.pop("/api/v1/orders/{id}/file-references", None)
+if file_references is not None:
+    assert file_references.keys() == {"get"}
+    for name in ("FileReference", "PageResponseFileReference"):
+        schemas.pop(name, None)
 assert paths.keys() == baseline["paths"].keys(), "Изменились публичные маршруты"
 assert schemas == expected_schemas, "Изменились DTO"
 for path, operations in baseline["paths"].items():

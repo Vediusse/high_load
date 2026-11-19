@@ -1,0 +1,171 @@
+Проверка лабораторной 4 — локальное S3 и runtime config, 2026-11-19
+
+Основа: принятая lab3/main c9f0d1f, ветка feature/lab4.
+Полный clean verify: 201 tests, 0 failures/errors/skips, BUILD SUCCESS.
+Команда: DOCKER_AUTH_CONFIG='{"auths":{}}' JAVA_HOME=$(/usr/libexec/java_home -v 21) ./mvnw -B -ntp -fae clean verify
+
+Модуль                     Tests  JaCoCo lines    PMD
+catalog-service               17        98.94%      0
+common                        29        93.75%      0
+config-service                 4        93.55%      0
+discovery-service              2       100.00%      0
+file-service                  15        89.17%      0
+gateway-service                8        96.27%      0
+identity-service              35        95.89%      0
+kitchen-service               19        96.82%      0
+notification-service           7        94.24%      0
+order-service                 65        93.81%      0
+
+Spotless (Java/POM, AOSP 4 пробела), PMD и ArchUnit проходят.
+Во всех шести бизнес-сервисах проверяются три архитектурные границы:
+независимый domain, application через порты, отсутствие inbound -> outbound.
+Простые конструкторы/аксессоры используют Lombok; HTTP/JWT/multipart/SQL/Kafka/S3
+остаются в адаптерах, бизнес-API лабораторий 1–3 сохранён.
+
+Локальное S3
+Silo (поддерживаемая ветка MinIO), образ закреплён по версии и digest.
+AWS SDK S3Client, явный локальный endpoint/region/credentials, path-style requests.
+PostgreSQL — метаданные/outbox; приватный S3 bucket order-files — bytes.
+В Kafka только идентификаторы и версии; содержимое файлов в Git/Kafka не передаётся.
+Отдельная Docker-сеть, loopback-only API/console, отдельный scoped File credential.
+Консоль localhost:19001, вход проверен (204), анонимный bucket отвергается (403).
+
+Старые 4 объекта, включая DELETED, перенесены без изменения метаданных/связей.
+Размер/SHA-256 сверены с PG для каждого. Старый volume оставлен read-only.
+Flyway V2 хранит completion marker; повторяемый перенос и повреждённый источник
+проверены в IT. Настоящий S3/Testcontainers: round-trip, права, rollback,
+checksum, недоступность и восстановление. Файлового fallback нет.
+
+Runtime config
+Git — источник значений; Spring Cloud Bus Kafka — сигнал перечитать конфигурацию.
+Девять приложений подключены к runtime-config-events: 3 partitions/RF3/minISR2.
+Bus использует byte serializers, бизнес-каналы сохраняют string serializers.
+FilePolicy атомарно применяет max-bytes/MIME, отвергает невалидный набор;
+соединения/ключи/bucket/hard transfer bound меняются при перезапуске.
+Settings API только SUPERVISOR; refresh — отдельный локальный Config operator.
+Без credentials refresh=401; busenv=403; helper передаёт application/json.
+
+С одним остановленным брокером Git commit/push + Bus изменили лимит
+10 MiB -> 2048: новый большой PDF=413, маленький=201, старый большой скачивается.
+Затем через ту же шину возвращены 10 MiB. File StartedAt до/после одинаковый:
+2026-11-19T16:55:26.781839215Z
+В Kafka наблюдаются File AckRemoteApplicationEvent; ошибок сериализации нет.
+После проверки все три брокера восстановлены.
+
+Регрессия и Docker
+Все девять образов собраны. На пустых volumes подняты 19 healthy контейнеров,
+завершены kafka-init/s3-init, применены миграции, полный file smoke прошёл.
+Изолированное тестовое окружение удалено; рабочие данные сохранены.
+Рабочее окружение high-load-lab4: 19 healthy, Swagger localhost:18084.
+Защищённая регрессия L1–3, роли/JWT/отзыв/Identity outage, бизнес-цикл и API
+контракт прошли. Notifications: полный набор событий, private feed/read,
+poison/DLT и replay без дублей. Полный Kafka outage сохраняет заказ+outbox;
+после восстановления pending доставлен. Notification outage/backlog пройдены.
+
+Config Server читает HTTPS GitHub напрямую, без local override:
+label lab4, commit ece3f7c95ee3eb71762c0fa092c03545bcb6f2e0.
+Доступы — CREDENTIALS.local.md и ADMIN-ACCESS.local.md (0600, Git ignored).
+.env/доступы/backup отсутствуют в Git и Docker build context.
+Инструкция и схемы: docs/lab4-s3-runtime.md; бизнес-демо: docs/lab4-run.md.
+Границы production описаны в docs/architecture.txt; учебный стенд не заявляется
+готовым production-кластером. Финальную приёмку выполняет пользователь.
+
+Дополнение Postman 2026-11-19
+Postman lab4 — проверка 2026-11-19
+
+Коллекция: postman/lab4.postman_collection.json, 4 независимые папки,
+140 запросов: бизнес 40, файлы 42, уведомления 32, runtime 26.
+Два полных прогона подряд: 289 HTTP requests (включая bounded polling),
+477 assertions, 0 failures. Новые имена/ID/версии и отдельные переменные папок.
+
+Отдельная папка runtime при реальном commit/push Git:
+2048 bytes — 2 iterations, 55 requests / 91 assertions / 0 failures;
+10485760 bytes — 2 iterations, 54 requests / 90 assertions / 0 failures.
+Первое изменение: 10 MiB -> 2 KiB, generation 1 -> 2, большой PDF=413.
+Повтор 2 KiB: generation 2 -> 2, без лишнего commit.
+Восстановление: 2 KiB -> 10 MiB, generation 2 -> 3, большой PDF=201.
+Повтор 10 MiB также проходит. Существующий PDF скачивается, SHA-256 проверен.
+Итого Newman: 398 requests / 658 assertions / 0 failures.
+File StartedAt не менялся во время четырёх runtime-прогонов:
+2026-11-19T20:39:50.789223052Z
+В логах за этот период нет остановки EurekaClient и ошибок сериализации.
+
+Config repo lab4: 7611e569bf405268c8d34e1c63c4a1aaff02ec6a.
+File: eureka.client.refresh.enable=false, refresh политики не пересоздаёт discovery.
+Bus: auto.offset.reset=latest, новые подписчики не проигрывают старые refresh.
+Бизнес-consumers сохраняют свои offsets/earliest; Root Spring Kafka настройки
+не менялись. Git helper меняет только max-bytes; второй вызов идемпотентен.
+
+localhost:18889/ = 404 (REST management, страницы нет);
+/actuator/health = 200; files/settings через Gateway требует SUPERVISOR JWT.
+Документированы реальные пути, JSON Content-Type, Basic Config operator и Swagger.
+
+Все 3 PDF проверены pdfinfo/pdftotext, по одной открываемой странице.
+PDF встроены в JSON, Working directory не нужен. Спецификация и акт остаются
+ACTIVE после Run, удаляется отдельный временный экземпляр.
+Environment с реальными секретами — только локальный файл 0600, Git/Docker ignored.
+Java не менялась; Maven baseline 201 tests/статические проверки остаётся прежней.
+
+Обновление структуры Postman/документации 2026-11-20
+Postman lab4 — подпапки и карта проекта, 2026-11-20
+
+Коллекция: 4 независимые родительские папки, 139 запросов.
+Бизнес: 40; файлы: 41; уведомления: 32; runtime: 26.
+В каждой папке отдельные подразделы: подготовка, основной сценарий,
+побочные случаи/ошибки, права и результат. Основной заказ имеет один итоговый GET;
+у спецификации одно основное скачивание. Проверки доступа и скачивание акта
+вынесены отдельно; дублирующее финальное скачивание спецификации удалено.
+
+Два полных прогона нового дерева: 288 HTTP requests с учётом polling,
+474 assertions, 0 failures. Все 139 request IDs уникальны; 152 scripts compile.
+Повторяемость родительских папок и переходы Runner по вложенным GET проверены.
+
+Отдельно выполнены runtime-подпапки, как при ручном показе:
+подготовка -> состояние до -> Git commit 2048 -> применить через Kafka ->
+поведение 413 -> итог -> состояние до -> Git restore -> применить -> 201 -> итог.
+40 HTTP requests / 66 assertions / 0 failures.
+Environment переносится между отдельными Run подпапок, JWT/ID не теряются.
+Процесс File Service не перезапускался; StartedAt: 2026-11-19T20:39:50.789223052Z.
+Лимит восстановлен к 10485760. Актуальный config-repo lab4: ece3f7c95ee3eb71762c0fa092c03545bcb6f2e0.
+GitHub остаётся источником конфигов; изменения сборки/Config Server не делались.
+
+Документация: docs/PROJECT-MAP.md, postman/README.md.
+Схемы: docs/diagrams/services и configuration в DOT/SVG/PNG.
+Различены build/start/runtime, указаны код, volumes и готовый GitHub UI.
+Проверены первичные документы Spring Cloud Config/Bus, GitHub Web Editor,
+Spring Boot Admin, Nacos, SCCA; архитектура не заменена другим config backend.
+Java не менялась, базовые Maven 201 tests / Spotless / PMD / ArchUnit не повторялись.
+
+Обновление PDF и имён скачивания, 2026-11-20
+
+Прежние технические примеры заменены спецификацией и актом с данными текущего
+заказа из API. Клиент Postman формирует документ; File хранит/возвращает исходные
+байты. У каждого заказа свой ID в PDF и своя контрольная сумма. Старые fileId
+сохраняют прежнее содержимое, нужна новая загрузка/повтор папки 02.
+Content-Disposition: ASCII filename без RFC2047; Unicode через filename* RFC8187
+с безопасным ASCII fallback. Исходное имя не управляет путём хранения.
+
+Фактически повторены: File module verify — 16 tests, Spotless/PMD/ArchUnit/coverage;
+два файловых прогона — 82 requests / 128 assertions; вся коллекция —
+144 requests / 237 assertions; в этих проверках 0 failures.
+PDF проверены строгим pypdf, Poppler и визуально; 19 контейнеров healthy.
+Полный Maven baseline 201 в этом исправлении не повторялся.
+
+Дополнительная попытка 10 MiB→2 KiB не прошла из-за TLS EOF/reset при доступе
+Config Server к GitHub. Исходный лимит восстановлен в Git (lab4 54a3d39) и
+подтверждён через API/реальные загрузки; File не перезапускался при проверке.
+Git cache сохранил предыдущий ece3f7c с тем же исходным лимитом 10 MiB.
+Подробный результат и границы проверки: postman/validation.txt.
+
+Многопозиционные PDF и пакет файлов в Postman, 2026-11-20
+
+Только клиентские скрипты/макеты и документация, Java/сервисы/конфиги не менялись.
+Одна/три/80 позиций, перенос длинного названия и нулевое принятое количество
+проверены строгим pypdf; PDF отрендерены Poppler и просмотрены.
+filesSpecificationCount задаёт общее число спецификаций: 1 пропускает лишний POST,
+3 — значение по умолчанию, 55 проверено с реальной пагинацией связей по 50.
+Два обычных файловых прогона: 92 HTTP / 144 assertions; один файл: 44/68;
+55 спецификаций и акт: 103/181; все четыре папки с 9 блюдами: 152/248.
+Во всех этих прогонах 0 failures. Двухстраничные PDF с 9 реальными блюдами
+скачаны из S3, содержимое/итог/SHA-256 подтверждены. 143 request IDs уникальны,
+158 scripts compile. Maven не повторялся: Java не менялась; процессы не перезапускались.

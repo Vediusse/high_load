@@ -22,3 +22,9 @@ catering:
 identity:
   exchange:
     gateway-secret: ${GATEWAY_EXCHANGE_SECRET}
+
+---
+spring:
+  cloud:
+    bus:
+      enabled: ${CONFIG_BUS_ENABLED:false}

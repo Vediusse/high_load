@@ -19,3 +19,14 @@ catering:
       issuer: corporate-catering-internal
       ttl: 30s
       clock-skew: 2s
+
+---
+spring:
+  jpa:
+    mapping-resources: META-INF/order-domain.hbm.xml
+
+---
+spring:
+  cloud:
+    bus:
+      enabled: ${CONFIG_BUS_ENABLED:false}

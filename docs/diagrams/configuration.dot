@@ -1,0 +1,30 @@
+digraph Configuration {
+  graph [rankdir=TB, bgcolor="white", pad=0.35, nodesep=0.5, ranksep=0.7,
+         fontname="Arial", fontsize=23, labelloc=t,
+         label="Конфиги остаются в GitHub\nЗагрузка при старте + изменение в runtime"];
+  node [shape=box, style="rounded,filled", fillcolor="#edf3fc", color="#496486",
+        fontname="Arial", fontsize=16, margin="0.22,0.14"];
+  edge [fontname="Arial", fontsize=13, color="#526578", arrowsize=0.8];
+
+  build [label="Maven / Docker build\nсобрать код и зависимости\nконфиги GitHub не вшиваются в JAR", fillcolor="#f2f4f7"];
+  git [label="GitHub config-repo · lab4\napplication.yml + <service>/application.yml\nредактирование: GitHub UI или git", fillcolor="#e7f1ff"];
+  config [label="Config Server\nGit backend · clone / fetch\nвнутренний API :8888"];
+  clients [label="8 Config Clients\nGateway, Discovery и 6 бизнес-сервисов\nзагрузка свойств при запуске"];
+  discovery [label="Eureka / Discovery\nимена сервисов → адреса HTTP", fillcolor="#fff3df"];
+
+  operator [label="Оператор\ncommit в GitHub → POST busrefresh\nPostman: папка 04 / подпапка 02", fillcolor="#f2f4f7"];
+  kafka [label="Spring Cloud Bus / Kafka\nruntime-config-events\n3 partitions · RF3 · minISR2", fillcolor="#f1e8fc", color="#8155a1"];
+  file [label="File Service\nполучить сигнал → перечитать Git\nпроверить → атомарно применить FilePolicy"];
+  applied [label="Применённая политика\nmax-bytes / allowed-mime-types\ngeneration / appliedAt\nJVM и Eureka-клиент не перезапускаются", fillcolor="#e4f3ea", color="#4a8060"];
+
+  build -> clients [label="запустить образ", style=dashed];
+  git -> config [label="при старте и запросе настроек", color="#306fb5", fontcolor="#306fb5", penwidth=2];
+  config -> clients [label="конфиги при запуске", color="#306fb5", fontcolor="#306fb5", penwidth=2];
+  clients -> discovery [label="регистрация / поиск HTTP-адресов", style=dashed];
+  operator -> git [label="новые значения", color="#306fb5", fontcolor="#306fb5"];
+  operator -> config [label="POST localhost:18889/actuator/busrefresh/file-service:**"];
+  config -> kafka [label="сигнал refresh", color="#8950a8", fontcolor="#8950a8"];
+  kafka -> file [label="не содержимое конфигов", color="#8950a8", fontcolor="#8950a8"];
+  config -> file [label="HTTP: свежие значения из Git", color="#306fb5", fontcolor="#306fb5"];
+  file -> applied [color="#3d8859", penwidth=2];
+}

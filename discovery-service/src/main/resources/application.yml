@@ -3,3 +3,9 @@ spring:
     name: discovery-service
   config:
     import: "configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+
+---
+spring:
+  cloud:
+    bus:
+      enabled: ${CONFIG_BUS_ENABLED:false}

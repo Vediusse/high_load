@@ -2,6 +2,7 @@ package ru.itmo.highload.common;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.sql.SQLTransientConnectionException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.RejectedExecutionException;
@@ -12,94 +13,206 @@ import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.CannotCreateTransactionException;
+import org.springframework.transaction.TransactionTimedOutException;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 import ru.itmo.highload.common.dto.out.PageResponse;
 import ru.itmo.highload.common.error.ApiException;
 
-@SpringBootTest(properties = "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.security.reactive.ReactiveSecurityAutoConfiguration", classes = CommonWebIT.Application.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+        properties =
+                "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.security.reactive.ReactiveSecurityAutoConfiguration",
+        classes = CommonWebIT.Application.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
 class CommonWebIT {
     @SpringBootConfiguration
     @EnableAutoConfiguration
     @Import(ExampleController.class)
-    static class Application { }
+    static class Application {}
 
     @Autowired WebTestClient client;
 
-    @Test void propagatesTraceThroughHeadersAndReactorContext() {
-        client.get().uri("/api/v1/trace").header("X-Trace-Id", "common-trace").exchange()
-                .expectStatus().isOk().expectHeader().valueEquals("X-Trace-Id", "common-trace")
-                .expectBody().jsonPath("$.items[0]").isEqualTo("common-trace");
-        client.get().uri("/api/v1/trace").header("X-Trace-Id", "bad value!").exchange()
-                .expectStatus().isOk().expectHeader().valueMatches("X-Trace-Id", "[a-f0-9-]{36}");
-        client.get().uri("/api/v1/trace").exchange().expectStatus().isOk()
-                .expectHeader().valueMatches("X-Trace-Id", "[a-f0-9-]{36}");
+    @Test
+    void propagatesTraceThroughHeadersAndReactorContext() {
+        client.get()
+                .uri("/api/v1/trace")
+                .header("X-Trace-Id", "common-trace")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .valueEquals("X-Trace-Id", "common-trace")
+                .expectBody()
+                .jsonPath("$.items[0]")
+                .isEqualTo("common-trace");
+        client.get()
+                .uri("/api/v1/trace")
+                .header("X-Trace-Id", "bad value!")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .valueMatches("X-Trace-Id", "[a-f0-9-]{36}");
+        client.get()
+                .uri("/api/v1/trace")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .valueMatches("X-Trace-Id", "[a-f0-9-]{36}");
     }
 
-    @Test void preservesDefaultErrorCodesAndStatusWithTrace() {
-        Object[][] cases = {{"business",422,"RULE_FAILED"},{"busy",503,"SERVICE_BUSY"},
-                {"integrity",409,"DATA_INTEGRITY_CONFLICT"},{"optimistic",409,"RESOURCE_VERSION_CONFLICT"},
-                {"database",503,"DEPENDENCY_UNAVAILABLE"},{"query-timeout",503,"DEPENDENCY_UNAVAILABLE"},
-                {"transaction-timeout",503,"DEPENDENCY_UNAVAILABLE"},
-                {"transaction-unavailable",503,"DEPENDENCY_UNAVAILABLE"},
-                {"unexpected",500,"INTERNAL_ERROR"}};
+    @Test
+    void preservesDefaultErrorCodesAndStatusWithTrace() {
+        Object[][] cases = {
+            {"business", 422, "RULE_FAILED"},
+            {"busy", 503, "SERVICE_BUSY"},
+            {"integrity", 409, "DATA_INTEGRITY_CONFLICT"},
+            {"optimistic", 409, "RESOURCE_VERSION_CONFLICT"},
+            {"database", 503, "DEPENDENCY_UNAVAILABLE"},
+            {"query-timeout", 503, "DEPENDENCY_UNAVAILABLE"},
+            {"transaction-timeout", 503, "DEPENDENCY_UNAVAILABLE"},
+            {"transaction-unavailable", 503, "DEPENDENCY_UNAVAILABLE"},
+            {"unexpected", 500, "INTERNAL_ERROR"}
+        };
         for (Object[] test : cases) {
-            client.get().uri("/api/v1/errors/"+test[0]).header("X-Trace-Id", "error-trace").exchange()
-                    .expectStatus().isEqualTo((int)test[1]).expectBody().jsonPath("$.code").isEqualTo(test[2])
-                    .jsonPath("$.traceId").isEqualTo("error-trace");
+            client.get()
+                    .uri("/api/v1/errors/" + test[0])
+                    .header("X-Trace-Id", "error-trace")
+                    .exchange()
+                    .expectStatus()
+                    .isEqualTo((int) test[1])
+                    .expectBody()
+                    .jsonPath("$.code")
+                    .isEqualTo(test[2])
+                    .jsonPath("$.traceId")
+                    .isEqualTo("error-trace");
         }
-        client.get().uri("/missing").exchange().expectStatus().isNotFound()
-                .expectBody().jsonPath("$.code").isEqualTo("RESOURCE_NOT_FOUND");
-        client.post().uri("/api/v1/trace").exchange().expectStatus().isEqualTo(405)
-                .expectBody().jsonPath("$.code").isEqualTo("HTTP_405");
+        client.get()
+                .uri("/missing")
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("RESOURCE_NOT_FOUND");
+        client.post()
+                .uri("/api/v1/trace")
+                .exchange()
+                .expectStatus()
+                .isEqualTo(405)
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("HTTP_405");
     }
 
-    @Test void validatesBodiesAndQueryParametersWithoutChangingWireShape() {
-        client.post().uri("/api/v1/echo").bodyValue(Map.of("name", " ")).exchange().expectStatus().isBadRequest()
-                .expectBody().jsonPath("$.code").isEqualTo("VALIDATION_FAILED").jsonPath("$.fieldErrors[0].field").isEqualTo("name");
-        client.post().uri("/api/v1/echo").contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                .bodyValue("{").exchange().expectStatus().isBadRequest().expectBody().jsonPath("$.code").isEqualTo("MALFORMED_JSON");
-        client.get().uri("/api/v1/number?value=wrong").exchange().expectStatus().isBadRequest()
-                .expectBody().jsonPath("$.code").isEqualTo("VALIDATION_FAILED");
+    @Test
+    void validatesBodiesAndQueryParametersWithoutChangingWireShape() {
+        client.post()
+                .uri("/api/v1/echo")
+                .bodyValue(Map.of("name", " "))
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("VALIDATION_FAILED")
+                .jsonPath("$.fieldErrors[0].field")
+                .isEqualTo("name");
+        client.post()
+                .uri("/api/v1/echo")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{")
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("MALFORMED_JSON");
+        client.get()
+                .uri("/api/v1/number?value=wrong")
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("VALIDATION_FAILED");
     }
 
-    @Test void downstreamUnauthorizedIncludesBearerChallenge() {
-        client.get().uri("/api/v1/errors/unauthorized").exchange()
-                .expectStatus().isUnauthorized().expectHeader().valueEquals("WWW-Authenticate", "Bearer")
-                .expectBody().jsonPath("$.code").isEqualTo("AUTHENTICATION_REQUIRED");
+    @Test
+    void downstreamUnauthorizedIncludesBearerChallenge() {
+        client.get()
+                .uri("/api/v1/errors/unauthorized")
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectHeader()
+                .valueEquals("WWW-Authenticate", "Bearer")
+                .expectBody()
+                .jsonPath("$.code")
+                .isEqualTo("AUTHENTICATION_REQUIRED");
     }
 
     @RestController
     static class ExampleController {
         @GetMapping("/api/v1/trace")
         Mono<PageResponse<String>> trace() {
-            return Mono.deferContextual(context -> Mono.just(new PageResponse<>(List.of(context.<String>get("traceId")),0,20,false)));
+            return Mono.deferContextual(context ->
+                    Mono.just(
+                            new PageResponse<>(
+                                    List.of(context.<String>get("traceId")), 0, 20, false)));
         }
+
         @PostMapping("/api/v1/echo")
-        Input echo(@Valid @RequestBody Input input) { return input; }
+        Input echo(@Valid @RequestBody Input input) {
+            return input;
+        }
+
         @GetMapping("/api/v1/number")
-        int number(@RequestParam int value) { return value; }
+        int number(@RequestParam int value) {
+            return value;
+        }
+
         @GetMapping("/api/v1/errors/{kind}")
         void error(@PathVariable String kind) {
             throw switch (kind) {
-                case "business" -> new ApiException(HttpStatus.UNPROCESSABLE_ENTITY,"RULE_FAILED","Test rule");
-                case "unauthorized" -> new ApiException(HttpStatus.UNAUTHORIZED,"AUTHENTICATION_REQUIRED","Invalid token");
+                case "business" ->
+                        new ApiException(
+                                HttpStatus.UNPROCESSABLE_ENTITY, "RULE_FAILED", "Test rule");
+                case "unauthorized" ->
+                        new ApiException(
+                                HttpStatus.UNAUTHORIZED,
+                                "AUTHENTICATION_REQUIRED",
+                                "Invalid token");
                 case "busy" -> new RejectedExecutionException();
                 case "integrity" -> new DataIntegrityViolationException("test constraint");
                 case "optimistic" -> new OptimisticLockingFailureException("test version");
-                case "database" -> new org.springframework.dao.DataAccessResourceFailureException("database down");
-                case "query-timeout" -> new org.springframework.dao.QueryTimeoutException("query timeout");
-                case "transaction-timeout" -> new org.springframework.transaction.TransactionTimedOutException("transaction timeout");
-                case "transaction-unavailable" -> new org.springframework.transaction.CannotCreateTransactionException(
-                        "Could not open EntityManager", new java.sql.SQLTransientConnectionException("database down"));
+                case "database" -> new DataAccessResourceFailureException("database down");
+                case "query-timeout" -> new QueryTimeoutException("query timeout");
+                case "transaction-timeout" ->
+                        new TransactionTimedOutException("transaction timeout");
+                case "transaction-unavailable" ->
+                        new CannotCreateTransactionException(
+                                "Could not open EntityManager",
+                                new SQLTransientConnectionException("database down"));
                 default -> new IllegalStateException("test unexpected");
             };
         }
     }
-    record Input(@NotBlank String name) { }
+
+    record Input(@NotBlank String name) {}
 }

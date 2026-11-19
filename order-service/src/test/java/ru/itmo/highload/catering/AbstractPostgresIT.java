@@ -1,13 +1,17 @@
 package ru.itmo.highload.catering;
 
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
+import ru.itmo.highload.common.security.InternalSecurityTestConfiguration;
+import ru.itmo.highload.common.security.TestTokens;
 
-@org.springframework.context.annotation.Import(ru.itmo.highload.common.security.InternalSecurityTestConfiguration.class)
+@org.springframework.context.annotation.Import(InternalSecurityTestConfiguration.class)
 abstract class AbstractPostgresIT {
 
     protected static final CatalogFixture catalog = new CatalogFixture();
@@ -21,24 +25,23 @@ abstract class AbstractPostgresIT {
 
     @DynamicPropertySource
     static void configurePostgres(DynamicPropertyRegistry registry) {
-        ru.itmo.highload.common.security.TestTokens.register(registry);
+        TestTokens.register(registry);
         registry.add("clients.catalog.url", catalog::url);
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
     }
 
-    @Autowired
-    protected JdbcTemplate jdbcTemplate;
+    @Autowired protected JdbcTemplate jdbcTemplate;
 
-    @Autowired
-    protected io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry breakers;
+    @Autowired protected CircuitBreakerRegistry breakers;
 
     @BeforeEach
     void cleanBusinessTables() {
         catalog.reset();
-        breakers.getAllCircuitBreakers().forEach(io.github.resilience4j.circuitbreaker.CircuitBreaker::reset);
-        jdbcTemplate.execute("""
+        breakers.getAllCircuitBreakers().forEach(CircuitBreaker::reset);
+        jdbcTemplate.execute(
+                """
                 TRUNCATE TABLE order_status_history, order_line, corporate_order,
                     delivery_point, organization CASCADE
                 """);

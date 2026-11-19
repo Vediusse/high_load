@@ -1,36 +1,64 @@
 package ru.itmo.highload.catering;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.nimbusds.jose.*;
+import com.nimbusds.jose.JOSEObjectType;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.MACSigner;
-import com.nimbusds.jwt.*;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.PlainJWT;
+import com.nimbusds.jwt.SignedJWT;
 import com.sun.net.httpserver.HttpServer;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.time.Instant;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.*;
+import java.util.function.Consumer;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.*;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.*;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import ru.itmo.highload.catering.config.JwtProperties;
-import ru.itmo.highload.catering.identity.dto.in.CreateUserRequest;
-import ru.itmo.highload.catering.identity.dto.in.LoginRequest;
-import ru.itmo.highload.catering.identity.dto.out.TokenResponse;
-import ru.itmo.highload.catering.identity.entity.RoleCode;
-import ru.itmo.highload.catering.identity.service.UserService;
+import ru.itmo.highload.catering.identity.adapters.out.persistence.UserRepository;
+import ru.itmo.highload.catering.identity.application.UserService;
+import ru.itmo.highload.catering.identity.application.dto.in.CreateUserRequest;
+import ru.itmo.highload.catering.identity.application.dto.in.LoginRequest;
+import ru.itmo.highload.catering.identity.application.dto.out.TokenResponse;
+import ru.itmo.highload.catering.identity.domain.model.RoleCode;
+import ru.itmo.highload.common.domain.BusinessFailure;
+import ru.itmo.highload.common.security.InternalJwt;
+import ru.itmo.highload.common.security.TestTokens;
 
 @Testcontainers
 @AutoConfigureWebTestClient
@@ -54,7 +82,7 @@ class IdentityApiIT {
     static volatile String receivedTrace;
 
     static {
-        new java.security.SecureRandom().nextBytes(secret);
+        new SecureRandom().nextBytes(secret);
         try {
             order = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             order.createContext(
@@ -71,7 +99,7 @@ class IdentityApiIT {
                                                 + organizationActive
                                                 + "}"
                                         : "{\"code\":\"RESOURCE_NOT_FOUND\",\"message\":\"Организация"
-                                              + " не найдена\",\"fieldErrors\":[],\"traceId\":\"identity-it\"}";
+                                                + " не найдена\",\"fieldErrors\":[],\"traceId\":\"identity-it\"}";
                         if (organizationBody != null) body = organizationBody;
                         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
                         exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -80,14 +108,14 @@ class IdentityApiIT {
                         exchange.close();
                     });
             order.start();
-        } catch (java.io.IOException error) {
+        } catch (IOException error) {
             throw new ExceptionInInitializerError(error);
         }
     }
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry properties) {
-        ru.itmo.highload.common.security.TestTokens.register(properties);
+        TestTokens.register(properties);
         properties.add("spring.datasource.url", postgres::getJdbcUrl);
         properties.add("spring.datasource.username", postgres::getUsername);
         properties.add("spring.datasource.password", postgres::getPassword);
@@ -110,7 +138,7 @@ class IdentityApiIT {
     @Autowired CircuitBreakerRegistry breakers;
 
     @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
-    ru.itmo.highload.catering.identity.repository.UserRepository repository;
+    UserRepository repository;
 
     String admin;
     static final String PASSWORD = "integration-password-42";
@@ -173,8 +201,7 @@ class IdentityApiIT {
                 .getResponseBody();
     }
 
-    String signed(
-            String source, java.util.function.Consumer<JWTClaimsSet.Builder> change, byte[] key)
+    String signed(String source, Consumer<JWTClaimsSet.Builder> change, byte[] key)
             throws Exception {
         var builder = new JWTClaimsSet.Builder(SignedJWT.parse(source).getJWTClaimsSet());
         change.accept(builder);
@@ -270,7 +297,7 @@ class IdentityApiIT {
 
     @Test
     void signatureExpiryAndClaimsAreValidated() throws Exception {
-        List<java.util.function.Consumer<JWTClaimsSet.Builder>> changes =
+        List<Consumer<JWTClaimsSet.Builder>> changes =
                 List.of(
                         b -> b.expirationTime(Date.from(Instant.now().minusSeconds(90))),
                         b -> b.issueTime(Date.from(Instant.now().plusSeconds(90))),
@@ -293,13 +320,80 @@ class IdentityApiIT {
                     .expectStatus()
                     .isUnauthorized();
         byte[] wrongKey = new byte[32];
-        new java.security.SecureRandom().nextBytes(wrongKey);
+        new SecureRandom().nextBytes(wrongKey);
         get("/api/v1/me", signed(admin, b -> {}, wrongKey))
                 .exchange()
                 .expectStatus()
                 .isUnauthorized();
         var unsigned = new PlainJWT(SignedJWT.parse(admin).getJWTClaimsSet()).serialize();
         get("/api/v1/me", unsigned).exchange().expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void recipientDirectoryRequiresServiceCredentialAndReturnsOnlyActiveScopedIds() {
+        var active =
+                create(
+                        "recipient-active",
+                        Set.of("ORGANIZATION_REPRESENTATIVE"),
+                        organizationId,
+                        201);
+        var blocked =
+                create(
+                        "recipient-blocked",
+                        Set.of("ORGANIZATION_REPRESENTATIVE"),
+                        organizationId,
+                        201);
+        UUID foreignOrg = UUID.randomUUID();
+        organizationBody = "{\"id\":\"" + foreignOrg + "\",\"active\":true}";
+        create(
+                "recipient-foreign",
+                Set.of("ORGANIZATION_REPRESENTATIVE", "KITCHEN_MANAGER"),
+                foreignOrg,
+                201);
+        organizationBody = null;
+        var globalKitchen = create("recipient-kitchen", Set.of("KITCHEN_MANAGER"), null, 201);
+        http.get()
+                .uri(
+                        "/internal/v1/recipients?role=KITCHEN_MANAGER&organizationId="
+                                + organizationId)
+                .header("X-Notification-Credential", "test-notification-service-credential-42")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.items.length()")
+                .isEqualTo(1)
+                .jsonPath("$.items[0]")
+                .isEqualTo(globalKitchen.get("id").asText());
+        users.block(UUID.fromString(blocked.get("id").asText()));
+        String path =
+                "/internal/v1/recipients?role=ORGANIZATION_REPRESENTATIVE&organizationId="
+                        + organizationId;
+        http.get().uri(path).exchange().expectStatus().isForbidden();
+        get(path, admin).exchange().expectStatus().isForbidden();
+        http.get()
+                .uri(path)
+                .header("X-Notification-Credential", "wrong")
+                .exchange()
+                .expectStatus()
+                .isForbidden();
+        http.get()
+                .uri(path)
+                .header("X-Notification-Credential", "test-notification-service-credential-42")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.items.length()")
+                .isEqualTo(1)
+                .jsonPath("$.items[0]")
+                .isEqualTo(active.get("id").asText());
+        http.get()
+                .uri(path + "&size=51")
+                .header("X-Notification-Credential", "test-notification-service-credential-42")
+                .exchange()
+                .expectStatus()
+                .isBadRequest();
     }
 
     @Test
@@ -466,19 +560,30 @@ class IdentityApiIT {
 
     @Test
     void failedOrganizationCheckPreservesRolesAndPreviouslyIssuedToken() {
-        var user = create("bound-manager", Set.of("ORGANIZATION_REPRESENTATIVE"), organizationId, 201);
+        var user =
+                create("bound-manager", Set.of("ORGANIZATION_REPRESENTATIVE"), organizationId, 201);
         String id = user.get("id").asText();
         roles(id, Set.of("CLIENT_MANAGER"), 200);
         String token = login("bound-manager", PASSWORD);
-        long version = jdbc.queryForObject("select version from app_user where login='bound-manager'", Long.class);
+        long version =
+                jdbc.queryForObject(
+                        "select version from app_user where login='bound-manager'", Long.class);
 
         organizationStatus = 503;
         roles(id, Set.of("ORGANIZATION_REPRESENTATIVE"), 503);
 
-        assertThat(jdbc.queryForObject("select version from app_user where login='bound-manager'", Long.class))
+        assertThat(
+                        jdbc.queryForObject(
+                                "select version from app_user where login='bound-manager'",
+                                Long.class))
                 .isEqualTo(version);
-        get("/api/v1/me", token).exchange().expectStatus().isOk()
-                .expectBody().jsonPath("$.roles[0]").isEqualTo("CLIENT_MANAGER");
+        get("/api/v1/me", token)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.roles[0]")
+                .isEqualTo("CLIENT_MANAGER");
     }
 
     @Test
@@ -626,7 +731,7 @@ class IdentityApiIT {
         assertThatThrownBy(() -> users.bootstrap(null, null))
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> users.bootstrap("ok", "short"))
-                .isInstanceOf(ru.itmo.highload.common.error.ApiException.class);
+                .isInstanceOf(BusinessFailure.class);
         users.bootstrap("  New.Admin  ", PASSWORD);
         assertThat(jdbc.queryForObject("select login from app_user", String.class))
                 .isEqualTo("new.admin");
@@ -640,8 +745,12 @@ class IdentityApiIT {
         }
         post("/api/v1/users", Map.of(), null, 401);
         post("/api/v1/users/" + id + "/block", Map.of(), null, 401);
-        http.put().uri("/api/v1/users/" + id + "/roles").bodyValue(Map.of())
-                .exchange().expectStatus().isUnauthorized();
+        http.put()
+                .uri("/api/v1/users/" + id + "/roles")
+                .bodyValue(Map.of())
+                .exchange()
+                .expectStatus()
+                .isUnauthorized();
         assertThat(login("supervisor", PASSWORD)).isNotBlank();
     }
 
@@ -653,8 +762,13 @@ class IdentityApiIT {
                         "/actuator/health/liveness",
                         "/actuator/health/readiness"))
             get(path, null).exchange().expectStatus().isOk();
-        get("/v3/api-docs", null).exchange().expectStatus().isOk()
-                .expectBody().jsonPath("$.openapi").exists();
+        get("/v3/api-docs", null)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.openapi")
+                .exists();
         get("/v3/api-docs", admin)
                 .exchange()
                 .expectStatus()
@@ -719,11 +833,9 @@ class IdentityApiIT {
 
     @Test
     void databaseFailureDuringAuthenticationIsFailClosedAndNotBadCredentials() {
-        org.mockito.Mockito.doThrow(
-                        new org.springframework.dao.DataAccessResourceFailureException(
-                                "test outage"))
+        Mockito.doThrow(new DataAccessResourceFailureException("test outage"))
                 .when(repository)
-                .findById(org.mockito.ArgumentMatchers.any(UUID.class));
+                .findById(ArgumentMatchers.any(UUID.class));
         get("/api/v1/me", admin)
                 .exchange()
                 .expectStatus()
@@ -797,43 +909,64 @@ class IdentityApiIT {
             for (var call : calls) call.get();
         }
     }
+
     JsonNode exchangeToken(String external, int status) {
-        return http.post().uri("/internal/v1/auth/exchange")
+        return http.post()
+                .uri("/internal/v1/auth/exchange")
                 .headers(headers -> headers.setBearerAuth(external))
-                .header("X-Gateway-Credential", ru.itmo.highload.common.security.TestTokens.GATEWAY_SECRET)
-                .exchange().expectStatus().isEqualTo(status).expectBody(JsonNode.class)
-                .returnResult().getResponseBody();
+                .header("X-Gateway-Credential", TestTokens.GATEWAY_SECRET)
+                .exchange()
+                .expectStatus()
+                .isEqualTo(status)
+                .expectBody(JsonNode.class)
+                .returnResult()
+                .getResponseBody();
     }
 
     @Test
-    void exchangeChecksUserOnceAndInternalRequestsDoNotReadAuthenticationStateAgain() throws Exception {
-        org.mockito.Mockito.clearInvocations(repository);
+    void exchangeChecksUserOnceAndInternalRequestsDoNotReadAuthenticationStateAgain()
+            throws Exception {
+        Mockito.clearInvocations(repository);
         String internal = exchangeToken(admin, 200).get("accessToken").asText();
         var token = SignedJWT.parse(internal);
         assertThat(token.getHeader().getAlgorithm()).isEqualTo(JWSAlgorithm.RS256);
-        assertThat(token.getHeader().getType().toString()).isEqualTo(ru.itmo.highload.common.security.InternalJwt.TYPE);
-        assertThat(token.getJWTClaimsSet().getSubject()).isEqualTo(SignedJWT.parse(admin).getJWTClaimsSet().getSubject());
-        assertThat(token.getJWTClaimsSet().getExpirationTime().toInstant()).isBefore(Instant.now().plusSeconds(31));
+        assertThat(token.getHeader().getType().toString()).isEqualTo(InternalJwt.TYPE);
+        assertThat(token.getJWTClaimsSet().getSubject())
+                .isEqualTo(SignedJWT.parse(admin).getJWTClaimsSet().getSubject());
+        assertThat(token.getJWTClaimsSet().getExpirationTime().toInstant())
+                .isBefore(Instant.now().plusSeconds(31));
         get("/api/v1/users", internal).exchange().expectStatus().isOk();
         get("/api/v1/users", internal).exchange().expectStatus().isOk();
-        org.mockito.Mockito.verify(repository, org.mockito.Mockito.times(1)).findById(org.mockito.ArgumentMatchers.any(UUID.class));
+        Mockito.verify(repository, Mockito.times(1)).findById(ArgumentMatchers.any(UUID.class));
     }
 
     @Test
     void exchangeIsGatewayOnlyAndCannotRenewInternalTokens() {
-        http.post().uri("/internal/v1/auth/exchange").headers(h -> h.setBearerAuth(admin))
-                .exchange().expectStatus().isForbidden();
-        http.post().uri("/internal/v1/auth/exchange").headers(h -> h.setBearerAuth(admin))
-                .header("X-Gateway-Credential", "wrong").exchange().expectStatus().isForbidden();
+        http.post()
+                .uri("/internal/v1/auth/exchange")
+                .headers(h -> h.setBearerAuth(admin))
+                .exchange()
+                .expectStatus()
+                .isForbidden();
+        http.post()
+                .uri("/internal/v1/auth/exchange")
+                .headers(h -> h.setBearerAuth(admin))
+                .header("X-Gateway-Credential", "wrong")
+                .exchange()
+                .expectStatus()
+                .isForbidden();
         String internal = exchangeToken(admin, 200).get("accessToken").asText();
         exchangeToken(internal, 401);
     }
 
     @Test
     void externalTokenCannotClaimToBeAnInternalAdmission() throws Exception {
-        var forged = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.HS256)
-                .type(new JOSEObjectType(ru.itmo.highload.common.security.InternalJwt.TYPE)).build(),
-                SignedJWT.parse(admin).getJWTClaimsSet());
+        var forged =
+                new SignedJWT(
+                        new JWSHeader.Builder(JWSAlgorithm.HS256)
+                                .type(new JOSEObjectType(InternalJwt.TYPE))
+                                .build(),
+                        SignedJWT.parse(admin).getJWTClaimsSet());
         forged.sign(new MACSigner(secret));
         get("/api/v1/users", forged.serialize()).exchange().expectStatus().isUnauthorized();
         exchangeToken(forged.serialize(), 401);
@@ -848,13 +981,19 @@ class IdentityApiIT {
     }
 
     @Test
-    void internalLifetimeCannotExceedExternalExpiryAndExchangeFailsClosedOnDatabaseOutage() throws Exception {
-        String shortLived = signed(admin, claims -> claims.expirationTime(Date.from(Instant.now().plusSeconds(10))), secret);
+    void internalLifetimeCannotExceedExternalExpiryAndExchangeFailsClosedOnDatabaseOutage()
+            throws Exception {
+        String shortLived =
+                signed(
+                        admin,
+                        claims -> claims.expirationTime(Date.from(Instant.now().plusSeconds(10))),
+                        secret);
         String internal = exchangeToken(shortLived, 200).get("accessToken").asText();
         assertThat(SignedJWT.parse(internal).getJWTClaimsSet().getExpirationTime())
                 .isEqualTo(SignedJWT.parse(shortLived).getJWTClaimsSet().getExpirationTime());
-        org.mockito.Mockito.doThrow(new org.springframework.dao.DataAccessResourceFailureException("test outage"))
-                .when(repository).findById(org.mockito.ArgumentMatchers.any(UUID.class));
+        Mockito.doThrow(new DataAccessResourceFailureException("test outage"))
+                .when(repository)
+                .findById(ArgumentMatchers.any(UUID.class));
         exchangeToken(admin, 503);
     }
 }

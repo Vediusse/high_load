@@ -1,0 +1,7 @@
+# Docker may give a restarted broker another IP, including the former IP of a
+# different broker. Resolve service names afresh when Kafka reconnects, so a
+# cached address cannot leave a live connection attached to the wrong node ID.
+# Appended with java.security.properties; the JDK's other security defaults stay.
+networkaddress.cache.ttl=0
+networkaddress.cache.negative.ttl=0
+networkaddress.cache.stale.ttl=0

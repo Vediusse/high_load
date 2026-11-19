@@ -11,13 +11,26 @@ import reactor.core.publisher.Mono;
 
 @Component
 public class InternalBearerFilter implements GlobalFilter, Ordered {
-    @Override public int getOrder() { return -10; }
+    @Override
+    public int getOrder() {
+        return -10;
+    }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        return exchange.getPrincipal().ofType(JwtAuthenticationToken.class)
-                .map(actor -> exchange.mutate().request(request -> request.headers(headers ->
-                        headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + actor.getToken().getTokenValue()))).build())
-                .defaultIfEmpty(exchange).flatMap(chain::filter);
+        return exchange.getPrincipal()
+                .ofType(JwtAuthenticationToken.class)
+                .map(actor ->
+                        exchange.mutate()
+                                .request(request ->
+                                        request.headers(headers ->
+                                                headers.set(
+                                                        HttpHeaders.AUTHORIZATION,
+                                                        "Bearer "
+                                                                + actor.getToken()
+                                                                        .getTokenValue())))
+                                .build())
+                .defaultIfEmpty(exchange)
+                .flatMap(chain::filter);
     }
 }

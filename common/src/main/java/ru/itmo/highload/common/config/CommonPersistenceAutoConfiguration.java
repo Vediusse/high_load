@@ -1,7 +1,9 @@
 package ru.itmo.highload.common.config;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import ru.itmo.highload.common.error.PersistenceExceptionHandler;
 
@@ -11,5 +13,7 @@ import ru.itmo.highload.common.error.PersistenceExceptionHandler;
 public class CommonPersistenceAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
-    PersistenceExceptionHandler persistenceExceptionHandler() { return new PersistenceExceptionHandler(); }
+    PersistenceExceptionHandler persistenceExceptionHandler() {
+        return new PersistenceExceptionHandler();
+    }
 }

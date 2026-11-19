@@ -1,9 +1,11 @@
 package ru.itmo.highload.common.error;
 
 import java.util.List;
+import lombok.Getter;
 import org.springframework.http.HttpStatus;
 import ru.itmo.highload.common.dto.out.FieldErrorResponse;
 
+@Getter
 public class ApiException extends RuntimeException {
 
     private final HttpStatus status;
@@ -15,25 +17,10 @@ public class ApiException extends RuntimeException {
     }
 
     public ApiException(
-            HttpStatus status,
-            String code,
-            String message,
-            List<FieldErrorResponse> fieldErrors) {
+            HttpStatus status, String code, String message, List<FieldErrorResponse> fieldErrors) {
         super(message);
         this.status = status;
         this.code = code;
         this.fieldErrors = List.copyOf(fieldErrors);
-    }
-
-    public HttpStatus getStatus() {
-        return status;
-    }
-
-    public String getCode() {
-        return code;
-    }
-
-    public List<FieldErrorResponse> getFieldErrors() {
-        return fieldErrors;
     }
 }

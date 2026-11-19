@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hibernate-mapping xmlns="http://www.hibernate.org/xsd/hibernate-mapping" default-access="field">
+  <class name="ru.itmo.highload.catering.kitchen.domain.model.KitchenTask" table="kitchen_task">
+    <id name="orderId" type="uuid" column="order_id"><generator class="assigned"/></id>
+    <version name="version" type="long" column="version"/>
+    <property name="status" column="status">
+      <type name="org.hibernate.type.EnumType">
+        <param name="enumClass">ru.itmo.highload.catering.kitchen.domain.model.OrderStatus</param>
+        <param name="useNamed">true</param>
+      </type>
+    </property>
+    <property name="orderVersion" type="long" column="order_version"/>
+    <property name="updatedAt" type="java.time.Instant" column="updated_at"/>
+  </class>
+</hibernate-mapping>

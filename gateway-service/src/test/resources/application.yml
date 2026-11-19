@@ -10,3 +10,9 @@ catering:
   web:
     errors:
       enabled: false
+
+---
+spring:
+  cloud:
+    bus:
+      enabled: false

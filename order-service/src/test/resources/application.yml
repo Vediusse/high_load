@@ -148,3 +148,14 @@ catering:
   security:
     internal:
       enabled: true
+
+---
+spring:
+  jpa:
+    mapping-resources: META-INF/order-domain.hbm.xml
+
+---
+spring:
+  cloud:
+    bus:
+      enabled: false

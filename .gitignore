@@ -11,6 +11,8 @@ build/
 out/
 # Java response DTO packages are source code, not IDE build output.
 !**/src/**/dto/out/
+# Outbound adapters are Java source, not IDE build output.
+!**/src/**/adapters/out/
 *.class
 
 # Env
@@ -24,3 +26,12 @@ AI/
 
 # Локальные резервные копии БД
 backups/
+
+# Private local launch and credentials
+/compose.override.yaml
+/CREDENTIALS.local.md
+/ADMIN-ACCESS.local.md
+/postman/*.local.postman_environment.json
+/output/
+/tmp/
+/DEMO-FILES.local.md

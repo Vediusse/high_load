@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: file-service
+  cloud:
+    config:
+      enabled: false
+    openfeign:
+      client:
+        config:
+          order-service:
+            connectTimeout: 300
+            readTimeout: 500
+  webflux:
+    multipart:
+      max-parts: 3
+      max-in-memory-size: 256B
+      max-disk-usage-per-part: 2KB
+eureka:
+  client:
+    enabled: false
+catering:
+  blocking:
+    enabled: true
+    thread-name-prefix: file-test
+files:
+  max-bytes: 1024
+
+---
+spring:
+  cloud:
+    bus:
+      enabled: false
